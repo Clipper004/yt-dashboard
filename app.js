@@ -575,7 +575,7 @@ function renderKpis(d, a, soft){
   const row = (l, v, t = "") => `<div class="row"><span>${l}</span><b class="num">${v}</b>${t}</div>`;
   const group = (name, rows) => `<div class="group"><h3>${name}</h3>${rows.join("")}</div>`;
   const note = "last 10 vs previous 10";
-  const kHTML = `<div class="heads">${head(d.hiddenSubs ? "Hidden" : fmt(d.subs), "subscribers", tdHTML)}${head(fmt(d.views), "channel views")}${wh}</div>
+  const kHTML = `<div class="heads">${head(d.hiddenSubs ? "Hidden" : fmt(d.subs), "subscribers", tdHTML)}${head(Math.round(d.views).toLocaleString(), "channel views")}${wh}</div>
     <div class="ledger">${group("Audience response", [
       row(v48Label, nv(v48), notes.length ? `<span class="tr flat">${esc(notes.join(" · "))}</span>` : ""),
       row("Engagement", engAll.toFixed(1)+"%", full ? trend(rate(r10), rate(p10), 5, note) : ""),
