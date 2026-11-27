@@ -21,7 +21,7 @@ window.chartLibraryReady = new Promise(resolve => {
   load(0);
 });
 </script>
-<link rel="stylesheet" href="style.css?v=20261127-2">
+<link rel="stylesheet" href="style.css?v=20261127-4">
 </head>
 <body>
 <div class="app">
@@ -65,12 +65,12 @@ window.chartLibraryReady = new Promise(resolve => {
     <div id="abody" style="display:none">
       <div id="akpis"></div>
       <div class="grid"><div><h3>Daily views and net subscribers</h3><div class="cv"><canvas id="c5"></canvas></div></div><div><h3>Where views come from</h3><div class="cv"><canvas id="c6"></canvas></div></div></div>
-      <div class="wrap wide"><h3>Traffic source detail</h3><table class="wide"><thead><tr><th>Source</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Avg duration</th><th class="r">Viewed</th><th class="r">Subs gained</th><th class="r">Likes + comments</th><th class="r">Shares</th></tr></thead><tbody id="trafficRows"></tbody></table></div>
+      <details class="an-report an-report-wide"><summary>Traffic source detail</summary><div class="wrap"><table class="wide"><thead><tr><th>Source</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Avg duration</th><th class="r">Viewed</th><th class="r">Subs gained</th><th class="r">Likes + comments</th><th class="r">Shares</th></tr></thead><tbody id="trafficRows"></tbody></table></div></details>
       <div class="grid">
-        <div class="wrap wide"><h3>Top countries</h3><table class="wide"><thead><tr><th>Country</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Avg duration</th><th class="r">Viewed</th><th class="r">Subs gained</th><th class="r">Likes + comments</th><th class="r">Shares</th></tr></thead><tbody id="geo"></tbody></table></div>
-        <div class="wrap wide"><h3>Top videos: engagement and retention</h3><table class="wide"><thead><tr><th>Video</th><th class="r">Views</th><th class="r">% viewed</th><th class="r">Subs +</th><th class="r">Watch hrs</th><th class="r">Avg duration</th><th class="r">Likes</th><th class="r">Comments</th><th class="r">Shares</th><th class="r">Dislikes</th><th class="r">Subs −</th><th class="r">Unique viewers</th><th class="r">Engaged views</th></tr></thead><tbody id="ret"></tbody></table></div>
-        <div class="wrap"><h3>Devices</h3><table><thead><tr><th>Device</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Avg duration</th><th class="r">Viewed</th><th class="r">Engagement</th><th class="r">Shares</th></tr></thead><tbody id="devices"></tbody></table></div>
-        <div class="wrap"><h3>Top playlists</h3><table><thead><tr><th>Playlist ID</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Starts</th><th class="r">Saves</th><th class="r">Avg duration</th></tr></thead><tbody id="playlists"></tbody></table></div>
+        <details class="an-report an-report-wide"><summary>Top countries</summary><div class="wrap"><table class="wide"><thead><tr><th>Country</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Avg duration</th><th class="r">Viewed</th><th class="r">Subs gained</th><th class="r">Likes + comments</th><th class="r">Shares</th></tr></thead><tbody id="geo"></tbody></table></div></details>
+        <details class="an-report an-report-wide"><summary>Top videos: engagement and retention</summary><div class="wrap"><table class="wide"><thead><tr><th>Video</th><th class="r">Views</th><th class="r">% viewed</th><th class="r">Subs +</th><th class="r">Watch hrs</th><th class="r">Avg duration</th><th class="r">Likes</th><th class="r">Comments</th><th class="r">Shares</th><th class="r">Dislikes</th><th class="r">Subs −</th><th class="r">Unique viewers</th><th class="r">Engaged views</th></tr></thead><tbody id="ret"></tbody></table></div></details>
+        <details class="an-report"><summary>Devices</summary><div class="wrap"><table><thead><tr><th>Device</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Avg duration</th><th class="r">Viewed</th><th class="r">Engagement</th><th class="r">Shares</th></tr></thead><tbody id="devices"></tbody></table></div></details>
+        <details class="an-report"><summary>Top playlists</summary><div class="wrap"><table><thead><tr><th>Playlist ID</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Starts</th><th class="r">Saves</th><th class="r">Avg duration</th></tr></thead><tbody id="playlists"></tbody></table></div></details>
       </div>
       <div id="extraReports"></div>
       <p class="sub" style="margin-top:14px">Video thumbnail impressions and thumbnail click-through rate are not included in these API reports. Annotation and card metrics appear when YouTube returns them for your channel.</p>
@@ -89,7 +89,7 @@ window.chartLibraryReady = new Promise(resolve => {
       <p class="sub" id="seoinsight" style="margin-top:10px"></p></section>
   </div>
   <section id="videos"><h2>Videos</h2><p class="sub">Sorted by lifetime views. Trend arrows compare estimated day-7 views with the loaded-video median. Views/day is model-based; the title score is heuristic.</p>
-    <div class="wrap"><table><thead><tr><th>Title</th><th class="r">Views</th><th class="r">Likes</th><th class="r">Comments</th><th class="r">Engagement</th><th class="r">Modeled views/day</th><th class="r">Title heuristic</th></tr></thead><tbody id="rows"></tbody></table></div></section>
+    <details class="an-report"><summary>Video performance</summary><div class="wrap"><table><thead><tr><th>Title</th><th class="r">Views</th><th class="r">Likes</th><th class="r">Comments</th><th class="r">Engagement</th><th class="r">Modeled views/day</th><th class="r">Title heuristic</th></tr></thead><tbody id="rows"></tbody></table></div></details></section>
 </main>
 </div></div>
 
@@ -155,5 +155,5 @@ window.chartLibraryReady = new Promise(resolve => {
 </div></div>
 
 <script src="config.js"></script>
-<script src="app.js?v=20261127-2"></script>
+<script src="app.js?v=20261127-4"></script>
 </body></html>

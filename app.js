@@ -403,22 +403,21 @@ function analyze(d){
 }
 
 function chart(id, cfg, soft){
+  const canvas = $(id);
+  if (!canvas) return;
   if (!window.Chart){
-    const canvas = $(id);
-    if (canvas){
-      const notice = document.createElement("p");
-      notice.className = "chart-unavailable";
-      notice.textContent = "Charts could not load. Check your connection and reload.";
-      canvas.replaceWith(notice);
-    }
+    chartFailure(id, new Error("Chart.js could not load. Check your connection and reload."));
     return;
   }
   const old = charts[id];
   if (soft && old && old._ty === cfg.type){
-    old.data.labels = cfg.data.labels;
-    if (old.data.datasets.length === cfg.data.datasets.length) cfg.data.datasets.forEach((ds, i) => Object.assign(old.data.datasets[i], ds));
-    else old.data.datasets = cfg.data.datasets;
-    old.update(); requestAnimationFrame(() => { if (charts[id] === old){ old.resize(); old.update("none"); } }); return;
+    try{
+      old.data.labels = cfg.data.labels;
+      if (old.data.datasets.length === cfg.data.datasets.length) cfg.data.datasets.forEach((ds, i) => Object.assign(old.data.datasets[i], ds));
+      else old.data.datasets = cfg.data.datasets;
+      old.update(); requestAnimationFrame(() => { if (charts[id] === old){ old.resize(); old.update("none"); } });
+    } catch(error){ chartFailure(id,error); }
+    return;
   }
   if (old) old.destroy();
   Object.assign(Chart.defaults,{color:"#c1d5d9",borderColor:"rgba(132,196,205,.2)"}); Chart.defaults.font.family = "Plus Jakarta Sans, system-ui, sans-serif"; Chart.defaults.font.size = 12;
@@ -427,9 +426,24 @@ function chart(id, cfg, soft){
   Chart.defaults.elements.bar.borderRadius = 6; Chart.defaults.elements.bar.borderSkipped = false; Chart.defaults.elements.arc.borderRadius = 0;
   Object.assign(Chart.defaults.plugins.tooltip,{backgroundColor:"#02161c",borderColor:"#1b5260",borderWidth:1,padding:12,cornerRadius:7,titleColor:"#ffffff",bodyColor:"#d8edf0",boxPadding:4});
   Chart.defaults.plugins.legend.labels.usePointStyle = false; Chart.defaults.plugins.legend.labels.boxWidth = 10; Chart.defaults.plugins.legend.labels.boxHeight = 3;
-  charts[id] = new Chart($(id), cfg); charts[id]._ty = cfg.type;
-  const instance = charts[id];
-  requestAnimationFrame(() => { if (charts[id] === instance){ instance.resize(); instance.update("none"); } });
+  try{
+    charts[id] = new Chart(canvas, cfg); charts[id]._ty = cfg.type;
+    const instance = charts[id];
+    requestAnimationFrame(() => { if (charts[id] === instance){ instance.resize(); instance.update("none"); } });
+  } catch(error){ chartFailure(id,error); }
+}
+function chartFailure(id,error){
+  console.error("Chart failed:", id, error);
+  if (charts[id]){
+    try{ charts[id].destroy(); } catch(e){}
+    delete charts[id];
+  }
+  const canvas = $(id);
+  if (!canvas) return;
+  const notice = document.createElement("p");
+  notice.className = "chart-unavailable";
+  notice.textContent = "Chart unavailable: " + error.message;
+  canvas.replaceWith(notice);
 }
 
 const ARROW = {up:"M4 12L12 4M6 4h6v6", down:"M4 4l8 8M12 6v6H6", flat:"M2.5 8h11M9.5 4l4 4-4 4"};
@@ -587,7 +601,7 @@ function render(d, a, soft){
   setHTML($("fc"), fcHTML(a), soft);
   // chart 1
   chart("c1", {type:"bar", data:{labels:a.v.map(x=>x.pub.toLocaleDateString(undefined,{month:"short",day:"numeric"})), datasets:[{data:a.v.map(x=>x.views), backgroundColor:a.v.map(x=>x.short?"#efbd6b":"#24a8ba")} ]}, options:{plugins:{legend:{display:false}}, scales:{x:{ticks:{maxTicksLimit:8}}}}}, soft);
-  drawC2(a, soft);
+  try{ drawC2(a, soft); } catch(error){ chartFailure("c2",error); }
   const bestDow = a.bestDow;
   const dowValues = a.dowAvg.map(x => Number.isFinite(x) ? Math.max(0, Math.round(x)) : 0), dowMax = Math.max(1, ...dowValues);
   chart("c3", {type:"bar", data:{labels:DAYS, datasets:[{label:"Indicative day-7 views",data:dowValues,backgroundColor:DAYS.map((_,i)=>i===bestDow?"#24a8ba":"rgba(36,168,186,.5)"),borderRadius:5,minBarLength:2}]}, options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,suggestedMax:dowMax,ticks:{callback:v=>fmt(v)}}}}}, soft);
@@ -609,7 +623,7 @@ function drawC2(a, soft){
   const fl = [], fv = []; let acc = 0;
   for (let i = 1; i <= 6; i++){ fl.push(new Date(Date.now()+i*5*864e5).toLocaleDateString(undefined,{month:"short",day:"numeric"})); for (let k = (i-1)*5; k < i*5; k++) acc += Number.isFinite(a.proj[k]) ? Math.max(0,a.proj[k]) : 0; fv.push(Math.round(run + acc)); }
   const yMax = Math.max(1, ...cum, ...fv);
-  chart("c2", {type:"line", data:{labels:[...lbl,...fl], datasets:[{label:"Cumulative views",data:cum,borderColor:"#24a8ba",backgroundColor:c=>{const a=c.chart.chartArea;if(!a)return null;const g=c.chart.ctx.createLinearGradient(0,a.top,0,a.bottom);g.addColorStop(0,"rgba(36,168,186,.24)");g.addColorStop(1,"rgba(36,168,186,0)");return g},fill:true,borderWidth:2,pointRadius:0,tension:.3},{label:"Forecast",data:[...Array(cum.length-1).fill(null),run,...fv],borderColor:"#efbd6b",borderDash:[6,5],pointRadius:0}]}, options:{scales:{x:{ticks:{maxTicksLimit:8}},y:{beginAtZero:true,suggestedMax:yMax,ticks:{callback:v=>fmt(v)}}}}}, soft);
+  chart("c2", {type:"line", data:{labels:[...lbl,...fl], datasets:[{label:"Cumulative views",data:cum,borderColor:"#24a8ba",backgroundColor:"rgba(36,168,186,.14)",fill:true,borderWidth:2,pointRadius:0,tension:.3},{label:"Forecast",data:[...Array(cum.length-1).fill(null),run,...fv],borderColor:"#efbd6b",borderDash:[6,5],pointRadius:0}]}, options:{scales:{x:{ticks:{maxTicksLimit:8}},y:{beginAtZero:true,suggestedMax:yMax,ticks:{callback:v=>fmt(v)}}}}}, soft);
 }
 function fcHTML(a){
   const cal = a.cal || {src:"model"}, kind = a.nextShort ? "Short" : "video";
