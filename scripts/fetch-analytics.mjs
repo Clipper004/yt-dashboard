@@ -5,6 +5,10 @@ import { mkdir, writeFile } from "node:fs/promises";
 const need = k => { const v = process.env[k]; if (!v) throw new Error("Missing secret " + k); return v; };
 const CID = need("GOOGLE_CLIENT_ID"), SEC = need("GOOGLE_CLIENT_SECRET");
 const CHANNELS = JSON.parse(need("CHANNELS_JSON"));          // [{"id":"UC...","refresh":"1//..."}]
+const REQUIRED_CHANNEL_IDS = ["UCIwqMe33MNm1nvOj8CJbYsg", "UC68LKIg7U0Iuz4Sj1qYyn9g", "UCfYKpYSoFPHloHRUWBi0_8g"];
+const configuredIds = new Set(CHANNELS.map(c => c.id));
+const missingIds = REQUIRED_CHANNEL_IDS.filter(id => !configuredIds.has(id));
+if (missingIds.length) throw new Error("CHANNELS_JSON is missing required channel IDs: " + missingIds.join(", "));
 const WITH_REV = process.env.WITH_REVENUE !== "false";
 const QUIET_OPTIONAL_DIMENSIONS = new Set(["annotationType", "cardType", "adType", "subscribedStatus"]);
 const iso = d => d.toISOString().slice(0, 10);
@@ -31,7 +35,7 @@ async function reportWithFallback(tok, id, name, expanded, simple){
   catch (e) { console.warn(`fallback ${name}: ${e.message}`); return report(tok, id, simple); }
 }
 await mkdir("data", {recursive:true});
-let ok = 0;
+let ok = 0, failed = 0;
 for (const c of CHANNELS){
   let skippedOptionalReports = 0;
   try {
@@ -78,8 +82,8 @@ for (const c of CHANNELS){
     const extra = {...Object.fromEntries(extraPairs), trafficDetails, retention};
     await writeFile(`data/analytics-${c.id}.json`, JSON.stringify({t:Date.now(), AN:{day, traffic, geo, vid, device, deviceMore, geoMore, trafficMore, dayMore, audience, cards, annotations, vidMore, playlist, rev, revMore, extra}}));
     console.log("ok", c.id); ok++;
-  } catch (e) { console.error("failed", c.id, e.message); }
+  } catch (e) { console.error("failed", c.id, e.message); failed++; }
   finally { console.log("optional reports skipped:", skippedOptionalReports); }
 }
-if (!ok) process.exit(1);
+if (!ok || failed) process.exit(1);
 

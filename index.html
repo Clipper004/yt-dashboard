@@ -37,7 +37,7 @@
   <div id="msg"></div>
   <div class="overview" id="kpis"></div>
   <section id="latest"><h2>Last 3 videos</h2>
-    <p class="sub">Views are compared with the median of the 10 uploads before these. The white mark on each bar is that typical figure.</p>
+    <p class="sub">Videos are compared at estimated day 7 with up to 10 earlier uploads at least 7 days old. The white mark is their median; estimates are indicative.</p>
     <div class="vids" id="last3"></div></section>
   <section id="forecast"><h2>Growth forecast</h2>
     <p class="sub">Built from how your videos normally grow after upload, then calibrated against your real recent views. Projections, not guarantees.</p>
@@ -57,24 +57,24 @@
         <div class="wrap"><h3>Devices</h3><table><thead><tr><th>Device</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Avg duration</th><th class="r">Viewed</th><th class="r">Engagement</th><th class="r">Shares</th></tr></thead><tbody id="devices"></tbody></table></div>
         <div class="wrap"><h3>Top playlists</h3><table><thead><tr><th>Playlist ID</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Starts</th><th class="r">Saves</th><th class="r">Avg duration</th></tr></thead><tbody id="playlists"></tbody></table></div>
       </div>
-      <div class="grid" id="extraReports"></div>
+      <div id="extraReports"></div>
       <p class="sub" style="margin-top:14px">Video thumbnail impressions and thumbnail click-through rate are not included in these API reports. Annotation and card metrics appear when YouTube returns them for your channel.</p>
     </div></section>
   <div class="grid" id="perf">
     <section><h2>Views per video</h2><p class="sub">Each bar is one upload, oldest to newest.</p><div class="cv"><canvas id="c1"></canvas></div></section>
     <section><h2>Cumulative views + 30-day forecast</h2><p class="sub">Dashed line is the 30-day forecast from the growth model.</p><div class="cv"><canvas id="c2"></canvas></div></section>
     <section><h2>Best day to post</h2><p class="sub">Average views at day 7, by upload weekday (so older videos are not favoured).</p><div class="cv"><canvas id="c3" role="img" aria-label="Average views at day seven for each upload weekday"></canvas></div><p class="sub" id="best" style="margin-top:10px"></p></section>
-    <section><h2>Shorts vs long-form</h2><p class="sub">Videos of 60 seconds or less count as Shorts.</p><div class="format-chart" id="c4"></div><div id="split" class="sub" style="margin-top:10px"></div></section>
+    <section><h2>Shorts vs long-form</h2><p class="sub">Duration-only proxy: videos up to 60 seconds are grouped as Shorts. Without aspect ratio or per-video YouTube content type, this can misclassify formats.</p><div class="format-chart" id="c4"></div><div id="split" class="sub" style="margin-top:10px"></div></section>
   </div>
   <div class="grid" id="seo">
-    <section><h2>Title SEO checker</h2><p class="sub">Type a draft title and get a score before you upload.</p>
+    <section><h2>Title SEO checker</h2><p class="sub">A local title checklist heuristic, not YouTube’s ranking formula.</p>
       <input type="text" id="draft" placeholder="Type a title…" aria-label="Draft title" oninput="draftScore()">
       <div id="dscore" style="margin-top:10px"></div></section>
-    <section><h2>Your title keywords</h2><p class="sub">Most-used words in titles, with average views per video that uses them.</p><div class="kw" id="kw"></div>
+    <section><h2>Your title keywords</h2><p class="sub">Most-used words and shrunk, age-normalized day-7 view estimates; association is not causation.</p><div class="kw" id="kw"></div>
       <p class="sub" id="seoinsight" style="margin-top:10px"></p></section>
   </div>
-  <section id="videos"><h2>Videos</h2><p class="sub">Sorted by views. Arrows compare each video with your median video. SEO is the title score out of 100.</p>
-    <div class="wrap"><table><thead><tr><th>Title</th><th class="r">Views</th><th class="r">Likes</th><th class="r">Comments</th><th class="r">Engagement</th><th class="r">Views/day</th><th class="r">SEO</th></tr></thead><tbody id="rows"></tbody></table></div></section>
+  <section id="videos"><h2>Videos</h2><p class="sub">Sorted by lifetime views. Trend arrows compare estimated day-7 views with the loaded-video median. Views/day is model-based; the title score is heuristic.</p>
+    <div class="wrap"><table><thead><tr><th>Title</th><th class="r">Views</th><th class="r">Likes</th><th class="r">Comments</th><th class="r">Engagement</th><th class="r">Modeled views/day</th><th class="r">Title heuristic</th></tr></thead><tbody id="rows"></tbody></table></div></section>
 </main>
 </div></div>
 

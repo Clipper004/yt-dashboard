@@ -25,7 +25,7 @@ Anyone who can access the dashboard can also access all published Analytics, inc
 1. Google Cloud → OAuth consent screen → publish the app (In production). In Testing mode refresh tokens die after 7 days.
 2. OAuth client: add `https://developers.google.com/oauthplayground` as an authorized redirect URI.
 3. OAuth Playground → gear → Use your own OAuth credentials (client ID + secret) → authorize `https://www.googleapis.com/auth/yt-analytics.readonly` and `.../yt-analytics-monetary.readonly` → Exchange → copy the Refresh token. Pick the right channel if Google asks.
-4. Repo → Settings → Secrets and variables → Actions: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `CHANNELS_JSON` = `[{"id":"UC...","refresh":"1//..."}]`.
+4. Repo → Settings → Secrets and variables → Actions: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `CHANNELS_JSON` = `[{"id":"UC...","refresh":"1//..."}]`. Include every configured channel, including SG3083D (`UCfYKpYSoFPHloHRUWBi0_8g`); the workflow now fails instead of publishing an incomplete set if a channel is missing or its Analytics request fails.
 5. Settings → Pages → Source: GitHub Actions. Then Actions tab → Deploy dashboard → Run workflow.
 6. Share the dashboard link. No password is required.
 

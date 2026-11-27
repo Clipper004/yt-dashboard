@@ -2,7 +2,9 @@
 let CH = [{label:CONFIG.CHANNEL_LABEL, id:CONFIG.CHANNEL_ID, handle:CONFIG.HANDLE, token:CONFIG.ACCESS_TOKEN}, ...CONFIG.EXTRA_CHANNELS.map((c,i) => ({label:c.label||c.id||c.handle, id:c.id||"", handle:c.handle||"", token:c.token||""}))];
 const BASE = CH.length; let cur = 0;
 try { (JSON.parse(localStorage.getItem("ytd_channels")||"[]")).forEach(c => CH.push({label:c.label, id:c.id||"", handle:c.handle||"", token:"", saved:true})); } catch(e){}
-try { const saved = localStorage.getItem("ytd_selected_channel"), i = CH.findIndex(c => (c.id || c.handle) === saved); if (i > 0 && !CONFIG.LOCKS[CH[i].id]) cur = i; } catch(e){}
+const unlockKey = id => "ytd_unlocked_" + id;
+function wasUnlocked(id){ try { return sessionStorage.getItem(unlockKey(id)) === "1"; } catch(e){ return false; } }
+try { const saved = localStorage.getItem("ytd_selected_channel"), i = CH.findIndex(c => (c.id || c.handle) === saved); if (i > 0 && (!CONFIG.LOCKS[CH[i].id] || wasUnlocked(CH[i].id))) cur = i; } catch(e){}
 function saveChs(){ try { localStorage.setItem("ytd_channels", JSON.stringify(CH.filter(c=>c.saved).map(c=>({label:c.label,id:c.id,handle:c.handle})))); } catch(e){} }
 const IC_CHECK='<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3.2L13 4.8"/></svg>';
 const IC_LOCK='<svg class="ic" style="color:var(--dim)" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.2" y="7" width="9.6" height="6.6" rx="1.6"/><path d="M5.4 7V5.2a2.6 2.6 0 015.2 0V7"/></svg>';
@@ -54,6 +56,7 @@ async function checkPw(){
       document.getElementById("pmodal").classList.remove("on");
       document.getElementById("p_in").value = "";
       w.textContent = "";
+      try { sessionStorage.setItem(unlockKey(CH[i].id), "1"); } catch(e){}
       pendingCh = -1;
       doSwitch(i);
     } else {
@@ -67,10 +70,16 @@ function doSwitch(i){
   cur = i; applyCh(); TOKEN = null; AN = null; WH365 = null; SNAP = []; ANR = false; lastAnSlot = -1; closeDd();
   closePw();
   try { localStorage.setItem("ytd_selected_channel", CH[cur].id || CH[cur].handle); } catch(e){}
+  const selected = CH[cur], selectedId = selected.id;
+  const snapshot = CONFIG.ACCESS_TOKEN.length >= 20 || !selectedId ? null : loadSnapshot(false, false, true);
   document.getElementById("apitch").style.display = ""; document.getElementById("abody").style.display = "none";
   document.getElementById("snap_status").textContent = "Loading the shared Analytics report…";
   renderSel();
-  boot().then(() => { if (CONFIG.ACCESS_TOKEN.length >= 20){ TOKEN = CONFIG.ACCESS_TOKEN; loadAnalytics(); } else loadSnapshot(); });
+  boot().then(async () => {
+    if (CONFIG.ACCESS_TOKEN.length >= 20){ TOKEN = CONFIG.ACCESS_TOKEN; loadAnalytics(); }
+    else if (snapshot){ const report = await snapshot; if (report && CH[cur] === selected && D?.id === selectedId) applySnapshot(report, selectedId); }
+    else loadSnapshot();
+  });
 }
 function openAdd(){ document.getElementById("a_warn").textContent = ""; document.getElementById("a_rm").style.display = CH[cur].saved ? "" : "none"; document.getElementById("amodal").classList.add("on"); document.getElementById("a_id").focus(); }
 function closeAdd(){ document.getElementById("amodal").classList.remove("on"); }
@@ -89,6 +98,7 @@ const $ = id => document.getElementById(id);
 const fmt = n => n >= 1e6 ? (n/1e6).toFixed(2)+"M" : n >= 1e4 ? (n/1e3).toFixed(1)+"K" : Math.round(n).toLocaleString();
 const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const SINGAPORE_WEEKDAY = new Intl.DateTimeFormat("en-US", {timeZone:"Asia/Singapore",weekday:"short"});
 const STOP = new Set("the a an of in on to and for is are was with this that how why what you your i it at by from or as be vs".split(" "));
 const POWER = ["secret","truth","shocking","never","best","worst","insane","real","why","how","exposed","ranked","impossible","most","least","hidden","crazy","new"];
 let charts = {}, D = null, CUR = null, SNAP = [], WH365 = null, busy = false, lastUpdate = 0, lastTry = 0, lastSlot = -1, lastAnSlot = -1, RKEY = null, ANR = false, bootN = 0;
@@ -136,6 +146,7 @@ function morphKids(a, b){
     if (x.nodeType === 3){ setText(x, y.nodeValue); continue; }
     if (x.nodeType !== 1) continue;
     syncAttrs(x, y);
+    if (x.classList.contains("earnings")){ x.textContent = y.textContent; continue; }
     if (x._counting){ x._final = y.textContent; continue; }   // intro count-up still running: it lands on the new value
     morphKids(x, y);
   }
@@ -213,10 +224,17 @@ const cls = s => s >= 70 ? "s-hi" : s >= 45 ? "s-mid" : "s-lo";
 
 function kwStats(vids){
   const m = {};
-  vids.forEach(v => new Set((v.title.toLowerCase().match(/[a-z']{3,}/g) || []).filter(w => !STOP.has(w))).forEach(w => (m[w] = m[w] || []).push(v.views)));
-  return Object.entries(m).map(([w,a]) => ({w, n:a.length, avg:a.reduce((x,y)=>x+y,0)/a.length})).sort((a,b) => b.n-a.n).slice(0,14);
+  const logs = vids.map(v => Math.log(Math.max(1,v7of(v)))), prior = logs.length ? logs.reduce((s,x)=>s+x,0)/logs.length : 0;
+  vids.forEach(v => new Set((v.title.toLowerCase().match(/[a-z']{3,}/g) || []).filter(w => !STOP.has(w))).forEach(w => (m[w] = m[w] || []).push(Math.log(Math.max(1,v7of(v))))));
+  return Object.entries(m).map(([w,a]) => ({w, n:a.length, avg:Math.exp((a.reduce((x,y)=>x+y,0)+3*prior)/(a.length+3))})).sort((a,b) => b.n-a.n).slice(0,14);
 }
 const median = a => { const s = [...a].sort((x,y)=>x-y), m = s.length>>1; return s.length ? (s.length%2 ? s[m] : (s[m-1]+s[m])/2) : 0; };
+const weightedQuantile = (values, weights, q) => {
+  const items = values.map((value,i)=>({value,weight:weights[i]})).filter(x=>Number.isFinite(x.value)&&x.weight>0).sort((a,b)=>a.value-b.value);
+  const total = items.reduce((s,x)=>s+x.weight,0), target = total*clamp(q,0,1); let cumulative = 0;
+  for (const item of items){ cumulative += item.weight; if (cumulative >= target) return item.value; }
+  return items.length ? items[items.length-1].value : 0;
+};
 
 /* ===== Growth model + earnings formula ===== */
 // A video earns views on a log curve: views(age) ~ ln(1 + age/tau). Shorts burn faster than long-form.
@@ -230,13 +248,13 @@ const shortShare = (a, d1, d2) => { let s = 0, t = 0; a.v.forEach(x => { const g
 const spanText = n => n < 120 ? n + " days" : n < 730 ? Math.round(n/30) + " months" : n < 3650 ? "about " + (n/365).toFixed(1) + " years" : "10+ years";
 
 function weekViews(a){
-  const today = new Date().toISOString().slice(0,10), now = Date.now();
+  const today = dateInZone(new Date(), "America/Los_Angeles"), now = Date.now();
   const rows = AN && AN.day ? AN.day.filter(r => r[0] < today).slice(-7) : [];
-  if (rows.length === 7) return {views: rows.reduce((s,r) => s + (r[1]||0), 0), src:"analytics"};
+  if (consecutiveDays(rows)) return {views: rows.reduce((s,r) => s + (r[1]||0), 0), src:"analytics"};
   if (SNAP.length >= 2){
-    const cur = SNAP[SNAP.length-1], first = SNAP[0], span = cur.t - first.t;
-    if (span >= 24*36e5){ let b = null; for (const x of SNAP) if (x.t <= now - 7*864e5) b = x;
-      return b ? {views: cur.v - b.v, src:"tracked"} : {views: (cur.v - first.v) / span * 7*864e5, src:"tracked"}; }
+    const cur = SNAP[SNAP.length-1]; let start = null;
+    for (const x of SNAP) if (x.t <= now - 7*864e5) start = x;
+    if (start && now - cur.t <= 36*36e5) return {views:Math.max(0,cur.v-start.v),src:"tracked"};
   }
   return {views: a.v.reduce((s,x) => s + gainWin(x, 0, 7), 0) * (a.cal ? a.cal.c : 1), src:"model"};
 }
@@ -244,23 +262,24 @@ function weekViews(a){
 function buildForecast(d, a){
   const v = a.v, now = Date.now();
   // 1) next upload, from the last videos normalised to day 7, recent ones weighted more
-  const aged = v.filter(x => x.age >= 3);
-  const pick = kind => { const p = aged.filter(x => x.short === kind).slice(-12); return p.length >= 3 ? p : aged.slice(-12); };
-  const est = p => { if (!p.length) return null; const vals = p.map(v7of); let w = 0, s = 0;
-    vals.forEach((y,i) => { const k = Math.pow(.85, vals.length-1-i); w += k; s += k * Math.log(Math.max(1,y)); });
-    const sr = vals.slice().sort((x,y) => x-y), q = f => sr[Math.round(f*(sr.length-1))], mid = Math.exp(s/w);
-    return {mid, lo:Math.min(q(.25), mid), hi:Math.max(q(.75), mid), n:vals.length}; };
+  const aged = v.filter(x => x.age >= 1 && x.age <= 90);
+  const pick = kind => { const sameFormat = aged.filter(x => x.short === kind).slice(-12); return {videos:sameFormat.length >= 3 ? sameFormat : aged.slice(-12), pooled:sameFormat.length < 3}; };
+  const est = ({videos,pooled}) => { if (!videos.length) return null;
+    const vals = videos.map(v7of), weights = videos.map(x => Math.pow(.5,x.age/(x.short?28:60))*Math.min(1,x.age/7));
+    const total = weights.reduce((s,x)=>s+x,0), squareTotal = weights.reduce((s,x)=>s+x*x,0);
+    const mid = Math.exp(vals.reduce((s,y,i)=>s+weights[i]*Math.log(Math.max(1,y)),0)/total);
+    return {mid,lo:weightedQuantile(vals,weights,.1),hi:weightedQuantile(vals,weights,.9),n:vals.length,nEff:squareTotal?total*total/squareTotal:0,pooled}; };
   const eS = est(pick(true)), eL = est(pick(false));
   const nextShort = v.slice(-5).filter(x => x.short).length >= 3;
-  const nx = (nextShort ? eS : eL) || eS || eL || {mid:0, lo:0, hi:0, n:0};
+  const nx = (nextShort ? eS : eL) || eS || eL || {mid:0, lo:0, hi:0, n:0, pooled:false};
 
   // 2) calibrate the model against what the channel really got recently
   const modelWin = (d1, d2) => v.reduce((s,x) => s + gainWin(x, d1, d2), 0);
   let c = 1, cal = {src:"model"};
-  const cutoff = new Date(now - 2*864e5).toISOString().slice(0,10);
-  const rows = AN && AN.day ? AN.day.filter(r => r[0] <= cutoff).slice(-14) : [];
-  if (rows.length >= 10){
-    const actual = rows.reduce((s,r) => s + (r[1]||0), 0), e = Math.max(0, (now - Date.parse(rows[rows.length-1][0] + "T23:59:59Z")) / 864e5), m = modelWin(e, e + rows.length);
+  const cutoff = dateInZone(new Date(), "America/Los_Angeles");
+  const rows = AN && AN.day ? AN.day.filter(r => r[0] < cutoff).slice(-14) : [];
+  if (rows.length >= 10 && consecutiveDays(rows)){
+    const actual = rows.reduce((s,r) => s + (r[1]||0), 0), e = Math.max(0, (now - zonedTimeMs(rows[rows.length-1][0], 23, 59, 59, "America/Los_Angeles")) / 864e5), m = modelWin(e, e + rows.length);
     if (m > 0 && actual > 0){ c = clamp(actual/m, .3, 4); cal = {src:"analytics", raw:actual/m}; }
   } else if (SNAP.length >= 2){
     const cur = SNAP[SNAP.length-1], f = SNAP[0], span = cur.t - f.t;
@@ -286,16 +305,17 @@ function buildForecast(d, a){
   if (AN && AN.day && AN.day.length >= 14){
     const net = r => (r[5]||0) - (r[6]||0), all = AN.day, v90 = all.reduce((s,r) => s + (r[1]||0), 0), n90 = all.reduce((s,r) => s + net(r), 0);
     const l28 = all.slice(-28), n28 = l28.reduce((s,r) => s + net(r), 0) / l28.length;
-    perDay = .5 * Math.max(0, v90 ? n90/v90 : 0) * projDaily + .5 * n28; real = true;
+    perDay = .5 * (v90 ? n90/v90 : 0) * projDaily + .5 * n28; real = true;
   }
-  perDay = Math.max(0, perDay);
-  const ms = [100,500,1e3,5e3,1e4,5e4,1e5,5e5,1e6,5e6,1e7].find(x => x > d.subs) || d.subs*2;
-  Object.assign(a, {nextViews:nx.mid, nextLo:nx.lo, nextHi:nx.hi, nextN:nx.n, nextShort, forecast30:total, f30lo:total*rng[0], f30hi:total*rng[1], proj, subsPerDay:perDay, ms, eta: perDay > 0 ? Math.ceil((ms - d.subs)/perDay) : null, real});
+  const ms = d.hiddenSubs ? null : [100,500,1e3,5e3,1e4,5e4,1e5,5e5,1e6,5e6,1e7].find(x => x > d.subs) || d.subs*2;
+  Object.assign(a, {nextViews:nx.mid, nextLo:nx.lo, nextHi:nx.hi, nextN:nx.n, nextNEff:nx.nEff||0, nextPooled:!!nx.pooled, nextShort, forecast30:total, f30lo:total*rng[0], f30hi:total*rng[1], proj, subsPerDay:perDay, subsCurrent:d.subs, subsHidden:!!d.hiddenSubs, ms, eta: ms != null && perDay > 0 ? Math.ceil((ms - d.subs)/perDay) : null, real});
   return a;
 }
 
 /* ----- Revenue estimate fallback: prefer this channel's observed Analytics RPM ----- */
-const SHORTS_RATIO = 0.04;
+const SHORTS_RATIO = 0.042;
+const BENCHMARK_LONG_RPM = 2.5;
+const SINGAPORE_LONG_RPM = 4.99;
 const money = n => { n = Math.max(0, n); return "$" + (n >= 1e4 ? Math.round(n).toLocaleString() : n.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})); };
 const learnedKey = () => "ytd_rpm_" + ((CUR && CUR.id) || CONFIG.CHANNEL_ID);
 function getLearned(){
@@ -304,11 +324,19 @@ function getLearned(){
     return j && j.rpm > 0 && j.days >= 14 && j.t > Date.now() - 90*864e5 ? j : null;
   } catch(e){ return null; }
 }
+function singaporeAudienceShare(){
+  if (!AN?.geo?.length || !AN?.day?.length) return null;
+  const singapore = AN.geo.find(r => r[0] === "SG"), totalViews = AN.day.reduce((sum,r) => sum + (r[1]||0), 0);
+  return singapore && totalViews > 0 ? clamp((singapore[1]||0) / totalViews, 0, 1) : null;
+}
 function rpmFor(sShare){
   const L = getLearned();
-  if (L) return {rpm:L.rpm, src:`your channel's recent Analytics RPM (${L.days} days)`};
-  if (CONFIG.RPM_LONG > 0) return {rpm:CONFIG.RPM_LONG * (1 - sShare + sShare * SHORTS_RATIO), src:"your custom RPM setting; Shorts share is estimated"};
-  return {rpm:null, src:"no recent channel revenue data or custom RPM"};
+  if (L) return {rpm:L.rpm, src:`your channel's recent Analytics RPM (${L.days} days)`, modeled:false};
+  if (CONFIG.RPM_LONG > 0) return {rpm:CONFIG.RPM_LONG * (1 - sShare + sShare * SHORTS_RATIO), src:"your custom RPM setting; Shorts share is estimated", modeled:false};
+  const sgShare = singaporeAudienceShare();
+  const longRpm = sgShare == null ? BENCHMARK_LONG_RPM : BENCHMARK_LONG_RPM * (1 - sgShare) + SINGAPORE_LONG_RPM * sgShare;
+  const geoNote = sgShare == null ? "audience geography unavailable; using a broad benchmark" : `${(sgShare*100).toFixed(0)}% Singapore audience proxy from Analytics; assumes the same country mix by format`;
+  return {rpm:longRpm * (1 - sShare + sShare * SHORTS_RATIO), src:`${geoNote}; third-party RPM priors; assumes the channel is monetized`, modeled:true};
 }
 const estEarn = (rows, sShare) => {
   const {rpm} = rpmFor(sShare);
@@ -327,27 +355,31 @@ function learnRpm(day, rev){
   try { localStorage.setItem(learnedKey(), JSON.stringify({rpm:usd/views*1000, views, days, t:Date.now()})); } catch(e){}
 }
 function weekEarn(a){
-  const today = new Date().toISOString().slice(0,10), rows = AN && AN.day ? AN.day.filter(r => r[0] < today) : [];
+  const today = dateInZone(new Date(), "America/Los_Angeles"), rows = AN && AN.day ? AN.day.filter(r => r[0] < today) : [];
   const last7 = rows.slice(-7), prev7 = rows.slice(-14,-7);
-  if (AN && AN.rev && AN.rev.length && last7.length === 7){
-    const m = new Map(AN.rev.map(r => [r[0], r[1]||0])), sum = r => r.reduce((s,x) => s + (m.get(x[0])||0), 0);
-    return {usd:sum(last7), prev: prev7.length === 7 ? sum(prev7) : null, real:true, note:"Actual figure from Analytics. The latest days may still update."};
+  if (AN?.rev?.length && consecutiveDays(last7)){
+    const m = new Map(AN.rev.map(r => [r[0], r[1]||0]));
+    if (last7.every(r => m.has(r[0]))){
+      const sum = r => r.reduce((s,x) => s + m.get(x[0]), 0);
+      const previousIsComplete = consecutiveDays(prev7) && prev7.every(r => m.has(r[0]));
+      return {usd:sum(last7), prev: previousIsComplete ? sum(prev7) : null, real:true, note:"Actual figure from the last 7 complete Analytics days. Analytics data may lag by 48–72 hours."};
+    }
   }
   const wv = weekViews(a), ss = shortShare(a, 0, 7), r = rpmFor(ss);
   let usd = wv.views / 1000 * r.rpm, prev = null;
   if (r.rpm == null) usd = null;
   if (wv.src === "analytics"){
     usd = estEarn(last7, ss);
-    if (prev7.length === 7) prev = estEarn(prev7, shortShare(a, 7, 14));
+    if (consecutiveDays(prev7)) prev = estEarn(prev7, shortShare(a, 7, 14));
   }
   const low = CUR && !CUR.demo && CUR.subs < 1000 ? " Under 1,000 subscribers, so ads may not be paying yet." : "";
-  const how = {analytics:"last 7 days of views", tracked:"tracked views", model:"modelled views"}[wv.src];
-  return {usd, prev, real:false, note:usd == null ? `No reliable estimate: ${r.src}.` : `${fmt(wv.views)} ${how} at about $${r.rpm.toFixed(2)} per 1,000 (${r.src}).` + low};
+  const how = {analytics:"last 7 complete Analytics days", tracked:"tracked views", model:"modelled views"}[wv.src];
+  return {usd, prev, real:false, modeled:r.modeled, note:`${fmt(wv.views)} ${how} at about $${r.rpm.toFixed(2)} per 1,000 (${r.src}).` + low};
 }
 
 function analyze(d){
   const now = Date.now(), v = d.vids.slice().sort((a,b) => a.pub-b.pub);
-  v.forEach(x => { x.age = Math.max(1, (now - x.pub)/864e5); x.vpd = x.views / x.age; x.eng = x.views ? (x.likes + x.comments)/x.views*100 : 0; x.short = x.dur <= 60; });
+  v.forEach(x => { x.age = Math.max(1, (now - x.pub)/864e5); x.short = x.dur <= 60; x.vpd = x.views / (G(x.age,x.short) * (x.age + (x.short ? TAU.s : TAU.l))); x.eng = x.views ? (x.likes + x.comments)/x.views*100 : 0; });
   const total = v.reduce((a,x)=>a+x.views,0), likes = v.reduce((a,x)=>a+x.likes,0), com = v.reduce((a,x)=>a+x.comments,0);
   const last30 = v.filter(x => x.age <= 30), last90 = v.filter(x => x.age <= 90);
   const span = Math.max(7, (now - v[0].pub)/864e5), perWeek = v.length / span * 7;
@@ -359,10 +391,13 @@ function analyze(d){
   // weekday + SEO insight
   const dow = Array(7).fill(0).map(()=>[]);
   const weekdayVideos = v.filter(x => x.age >= 3);
-  (weekdayVideos.length ? weekdayVideos : v).forEach(x => dow[x.pub.getDay()].push(v7of(x)));
-  const dowAvg = dow.map(a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0);
-  const hi = v.filter(x=>x.seo>=60), lo = v.filter(x=>x.seo<45), av = a => a.length ? a.reduce((s,x)=>s+x.views,0)/a.length : 0;
-  const res = {v, total, likes, com, perWeek, v30, dowAvg, dowN:dow.map(a=>a.length), hiAvg:av(hi), loAvg:av(lo), hiN:hi.length, loN:lo.length,
+  (weekdayVideos.length ? weekdayVideos : v).forEach(x => dow[DAYS.indexOf(SINGAPORE_WEEKDAY.format(x.pub))].push(v7of(x)));
+  const allV7 = v.map(v7of), priorV7 = allV7.length ? allV7.reduce((s,x)=>s+x,0)/allV7.length : 0;
+  const dowAvg = dow.map(a => a.length ? (a.length/(a.length+4))*(a.reduce((x,y)=>x+y,0)/a.length) + (4/(a.length+4))*priorV7 : 0);
+  const qualifiedDays = dowAvg.map((value,i)=>dow[i].length>=3?{value,i}:null).filter(Boolean);
+  const bestDow = qualifiedDays.length >= 2 ? qualifiedDays.reduce((best,x)=>x.value>best.value?x:best).i : null;
+  const hi = v.filter(x=>x.seo>=60), lo = v.filter(x=>x.seo<45), av = a => a.length ? a.reduce((s,x)=>s+v7of(x),0)/a.length : 0;
+  const res = {v, total, likes, com, perWeek, v30, dowAvg, dowN:dow.map(a=>a.length), bestDow, hiAvg:av(hi), loAvg:av(lo), hiN:hi.length, loN:lo.length,
           shorts:v.filter(x=>x.short), longs:v.filter(x=>!x.short), topKw, kw:kwStats(v), cum:null, last90, med:median(v.map(x=>x.views))};
   buildForecast(d, res); return res;
 }
@@ -399,22 +434,21 @@ const agoText = age => { const n = Math.floor(age); return n <= 1 ? "Uploaded in
 const clock = s => Math.floor(s/60) + ":" + String(s%60).padStart(2,"0");
 
 function renderLatest(a, soft){
-  const last = a.v.slice(-3).reverse(), base = a.v.slice(0,-3).slice(-10);
-  const tv = median(base.map(x=>x.views)), tl = median(base.map(x=>x.views ? x.likes/x.views*100 : 0)), tc = median(base.map(x=>x.views ? x.comments/x.views*100 : 0)), te = median(base.map(x=>x.eng));
+  const last = a.v.slice(-3).reverse(), base = a.v.slice(0,-3).filter(x=>x.age>=7).slice(-10);
+  const tv = base.length >= 3 ? median(base.map(v7of)) : 0, tl = base.length >= 3 ? median(base.map(x=>x.views ? x.likes/x.views*100 : 0)) : 0, tc = base.length >= 3 ? median(base.map(x=>x.views ? x.comments/x.views*100 : 0)) : 0, te = base.length >= 3 ? median(base.map(x=>x.eng)) : 0;
   const lHTML = last.map(x => {
-    const ratio = tv ? x.views / tv : 0;
-    // a video under a week old that is behind has not had a fair chance yet, so it is neutral
-    const dir = !tv ? "flat" : ratio > 1.1 ? "up" : ratio < .9 && x.age >= 7 ? "down" : "flat";
-    const word = !tv ? "Not enough history" : dir === "up" ? "Above typical" : dir === "down" ? "Below typical" : x.age < 7 && ratio < .9 ? "Still building" : "About typical";
-    const top = Math.max(x.views, tv, 1) * 1.08;
+    const day7 = v7of(x), ratio = tv ? day7 / tv : 0;
+    const dir = !tv || x.age < 7 ? "flat" : ratio > 1.1 ? "up" : ratio < .9 ? "down" : "flat";
+    const word = !tv ? "Not enough history" : x.age < 7 ? "Still building" : dir === "up" ? "Above typical" : dir === "down" ? "Below typical" : "About typical";
+    const top = Math.max(day7, tv, 1) * 1.08;
     const line = (label, val, now, before) => `<div class="row"><span>${label}</span><b class="num">${val}</b>${trend(now, before) || "<span></span>"}</div>`;
     const img = x.id ? `<img src="https://i.ytimg.com/vi/${encodeURIComponent(x.id)}/mqdefault.jpg" alt="" loading="lazy" onerror="this.remove()">` : "";
     const tag = x.id ? `a href="https://www.youtube.com/watch?v=${encodeURIComponent(x.id)}" target="_blank" rel="noopener" aria-label="Watch on YouTube"` : "div";
     return `<article class="vid"><${tag} class="thumb">${img}<b>${clock(x.dur)}</b></${x.id ? "a" : "div"}>
       <h3>${esc(x.title)}</h3><p class="when">${agoText(x.age)}</p>
       <div class="big"><span class="num">${fmt(x.views)}</span><small>views</small></div>
-      <div>${arrow(dir, word + (tv ? ", " + Math.round(ratio*100) + "% of " + fmt(tv) : ""))}</div>
-      <div class="meter ${dir}"><i style="width:${Math.min(100, x.views/top*100)}%"></i>${tv ? `<s style="left:${tv/top*100}%"></s>` : ""}</div>
+      <div>${arrow(dir, word + (tv && x.age >= 7 ? ", " + Math.round(ratio*100) + "% of day-7 median" : ""))}</div>
+      <div class="meter ${dir}"><i style="width:${Math.min(100, day7/top*100)}%"></i>${tv ? `<s style="left:${tv/top*100}%"></s>` : ""}</div>
       <div>${line("Like rate", (x.views ? x.likes/x.views*100 : 0).toFixed(1)+"%", x.views ? x.likes/x.views*100 : 0, tl)}
       ${line("Comments", fmt(x.comments), x.views ? x.comments/x.views*100 : 0, tc)}
       ${line("Engagement", x.eng.toFixed(1)+"%", x.eng, te)}</div></article>`;
@@ -423,6 +457,21 @@ function renderLatest(a, soft){
 }
 
 const dhm = ms => { const t = Math.max(0, Math.floor(ms/1000)), h = Math.floor(t/3600), m = Math.floor(t%3600/60), x = t%60; return h ? h+"h "+m+"m" : m ? m+"m "+x+"s" : x+"s"; };
+const dateInZone = (date, timeZone) => {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {timeZone,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(date).map(x=>[x.type,x.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
+const consecutiveDays = rows => rows.length > 0 && rows.every((row,i) => i === 0 || Date.parse(row[0]+"T00:00:00Z") - Date.parse(rows[i-1][0]+"T00:00:00Z") === 864e5);
+const zonedTimeMs = (day, hour, minute, second, timeZone) => {
+  const [year,month,date] = day.split("-").map(Number), target = Date.UTC(year,month-1,date,hour,minute,second);
+  const format = new Intl.DateTimeFormat("en-US", {timeZone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"});
+  let timestamp = target;
+  for (let i=0;i<3;i++){
+    const parts = Object.fromEntries(format.formatToParts(new Date(timestamp)).map(x=>[x.type,x.value]));
+    timestamp += target - Date.UTC(+parts.year,+parts.month-1,+parts.day,+parts.hour,+parts.minute,+parts.second);
+  }
+  return timestamp;
+};
 const PUBLIC_CACHE_MS = 10*60e3;
 const ANALYTICS_CACHE_MS = 3*60*60e3;
 const publicCacheKey = key => "ytd_public_" + encodeURIComponent(key);
@@ -475,8 +524,11 @@ function renderKpis(d, a, soft){
   const win = (f, target) => { if (SNAP.length < 2) return null; let b = null; for (const x of SNAP) if (x.t <= target) b = x; const partial = !b; if (!b) b = SNAP[0]; return {delta:cur[f]-b[f], partial, span:cur.t-b.t, from:b.t}; };
   const t48 = win("v", now - 48*36e5), t60 = win("v", now - 36e5), td = win("s", new Date().setHours(0,0,0,0));
   let v48 = t48 ? t48.delta : null, v60 = t60 ? t60.delta : null, est60 = false; const notes = [];
-  const useAn = (!t48 || t48.partial) && AN && AN.day && AN.day.length >= 2;
-  if (useAn) v48 = AN.day.slice(-2).reduce((s,r) => s + r[1], 0);
+  const analyticsCandidates = AN?.day?.filter(r => r[0] < dateInZone(new Date(), "America/Los_Angeles")) || [];
+  const completeAnalyticsDays = analyticsCandidates.slice(-2);
+  const useAn = (!t48 || t48.partial) && consecutiveDays(completeAnalyticsDays);
+  let v48Label = "Views in past 48 hours";
+  if (useAn){ v48 = completeAnalyticsDays.reduce((s,r) => s + (r[1]||0), 0); v48Label = "Last 2 complete Analytics days (lagged, not past 48h)"; }
   else if (t48 && t48.partial) notes.push("48h: " + dhm(t48.span) + " tracked so far");
   if (t60 && t60.partial){ est60 = true; v60 = t60.span >= 10*6e4 ? t60.delta * 36e5 / t60.span : null; }
   if (v60 == null && a.proj){ v60 = a.proj[0] / 24; est60 = true; }
@@ -487,8 +539,8 @@ function renderKpis(d, a, soft){
   else if (AN && AN.day && AN.day.length){ const r = AN.day[AN.day.length-1], n = (r[5]||0) - (r[6]||0); tdHTML = arrow(n > 0 ? "up" : n < 0 ? "down" : "flat", (n > 0 ? "+" : "") + fmt(n) + " <em>latest day, from Analytics</em>"); }
   else tdHTML = '<span class="tr wait"><i class="dot busy"></i>Tracking today’s gain</span>';
   const we = weekEarn(a), etr = we.prev != null && we.usd != null ? trend(we.usd, we.prev, 5) : "";
-  const earnLabel = we.real ? "earnings this week" : we.usd == null ? "estimate unavailable" : "estimated earnings this week";
-  const wh = `<div class="head" title="${esc(we.note)}"><span class="num">${we.usd == null ? "—" : money(we.usd)}</span><span class="l">${earnLabel}</span>${etr}</div>`;
+  const earnLabel = we.real ? "earnings this week" : we.modeled ? "modeled earnings this week" : "estimated earnings this week";
+  const wh = `<div class="head" title="${esc(we.note)}"><span class="num earnings">${we.modeled ? "~" : ""}${money(we.usd)}</span><span class="l">${earnLabel}</span>${etr}</div>`;
   const engAll = a.total ? (a.likes + a.com)/a.total*100 : 0;
   const r10 = a.v.slice(-10), p10 = a.v.slice(-20,-10), full = p10.length === 10;
   const up30 = a.v.filter(x => x.age <= 30).length, upPrev = a.v.filter(x => x.age > 30 && x.age <= 60).length;
@@ -498,17 +550,17 @@ function renderKpis(d, a, soft){
   const note = "last 10 vs previous 10";
   const kHTML = `<div class="heads">${head(d.hiddenSubs ? "Hidden" : fmt(d.subs), "subscribers", tdHTML)}${head(fmt(d.views), "channel views")}${wh}</div>
     <div class="ledger">${group("Audience response", [
-      row("Views in past 48 hours", nv(v48), notes.length ? `<span class="tr flat">${esc(notes.join(" · "))}</span>` : ""),
+      row(v48Label, nv(v48), notes.length ? `<span class="tr flat">${esc(notes.join(" · "))}</span>` : ""),
       row("Engagement", engAll.toFixed(1)+"%", full ? trend(rate(r10), rate(p10), 5, note) : ""),
       row("Total likes", fmt(a.likes)), row("Total comments", fmt(a.com)),
       row("Median views", fmt(a.med), full ? trend(median(r10.map(x=>x.views)), median(p10.map(x=>x.views)), 5, note) : "")])}
     ${group("Publishing", [
       row("Uploads per week", a.perWeek.toFixed(1), trend(up30, upPrev, 5, "last 30 days vs 30 before")),
-      row("Videos loaded", a.v.length), row("Share of Shorts", Math.round(a.shorts.length/a.v.length*100)+"%"),
+      row("Videos loaded", a.v.length), row("Shorts share of videos", a.v.length ? Math.round(a.shorts.length/a.v.length*100)+"%" : "—"),
       row("Channel age", Math.round((Date.now()-d.created)/864e5/365*10)/10+" yrs")])}
     ${group("Recent reach", [
       row("Average views per video", fmt(a.total/a.v.length), full ? trend(mean(r10.map(x=>x.views)), mean(p10.map(x=>x.views)), 5, note) : ""),
-      row("Views on uploads from the last 30 days", fmt(a.v30)),
+      row("Views on videos published in the last 30 days", fmt(a.v30)),
       row("Uploads in the last 30 days", up30),
       row("Current daily pace", fmt(a.dailyNow))])}</div>
     <div class="legend">${arrow("up","Up")}${arrow("flat","About level")}${arrow("down","Down")}</div>`;
@@ -524,18 +576,19 @@ function render(d, a, soft){
   // chart 1
   chart("c1", {type:"bar", data:{labels:a.v.map(x=>x.pub.toLocaleDateString(undefined,{month:"short",day:"numeric"})), datasets:[{data:a.v.map(x=>x.views), backgroundColor:a.v.map(x=>x.short?"#efbd6b":"#24a8ba")} ]}, options:{plugins:{legend:{display:false}}, scales:{x:{ticks:{maxTicksLimit:8}}}}}, soft);
   drawC2(a, soft);
-  const bestDow = a.dowAvg.indexOf(Math.max(...a.dowAvg));
+  const bestDow = a.bestDow;
   const dowValues = a.dowAvg.map(x => Number.isFinite(x) ? Math.max(0, Math.round(x)) : 0), dowMax = Math.max(1, ...dowValues);
-  chart("c3", {type:"bar", data:{labels:DAYS, datasets:[{label:"Estimated views at day 7",data:dowValues,backgroundColor:DAYS.map((_,i)=>i===bestDow?"#24a8ba":"rgba(36,168,186,.5)"),borderRadius:5,minBarLength:2}]}, options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,suggestedMax:dowMax,ticks:{callback:v=>fmt(v)}}}}}, soft);
-  const ok = a.dowN.map((n,i)=>n>=3?i:-1).filter(i=>i>=0); $("best").textContent = ok.length ? "Based on " + a.v.length + " videos. Weekdays with fewer than 3 uploads are less reliable." : "Upload more videos for a reliable weekday result.";
+  chart("c3", {type:"bar", data:{labels:DAYS, datasets:[{label:"Indicative day-7 views",data:dowValues,backgroundColor:DAYS.map((_,i)=>i===bestDow?"#24a8ba":"rgba(36,168,186,.5)"),borderRadius:5,minBarLength:2}]}, options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,suggestedMax:dowMax,ticks:{callback:v=>fmt(v)}}}}}, soft);
+  $("best").textContent = bestDow != null ? "Best of weekdays with at least 3 uploads; estimates are indicative." : "Not enough uploads across weekdays to name a reliable best day.";
   const formatTotal = a.shorts.length + a.longs.length;
   const shortsPct = formatTotal ? Math.round(a.shorts.length/formatTotal*100) : 0;
   setHTML($("c4"), `<div class="format-ring" style="--shorts:${shortsPct}%"><div><strong>${shortsPct}%</strong><span>Shorts</span></div></div>`, soft);
-  const avg = x => x.length ? fmt(x.reduce((s,v)=>s+v.views,0)/x.length) : "0";
-  setHTML($("split"), `Shorts: ${a.shorts.length} videos, ${avg(a.shorts)} avg views<br>Long-form: ${a.longs.length} videos, ${avg(a.longs)} avg views`, soft);
+  const avg = x => x.length ? fmt(x.reduce((s,v)=>s+v7of(v),0)/x.length) : "0";
+  setHTML($("split"), `Shorts: ${a.shorts.length} videos, ${avg(a.shorts)} avg day-7 est.<br>Long-form: ${a.longs.length} videos, ${avg(a.longs)} avg day-7 est.`, soft);
   setHTML($("kw"), a.kw.map(k => `<span>${esc(k.w)}<b>${fmt(k.avg)} avg, used ${k.n}×</b></span>`).join(""), soft);
-  $("seoinsight").textContent = a.hiN && a.loN ? `Titles scoring 60+ average ${fmt(a.hiAvg)} views (${a.hiN} videos). Titles under 45 average ${fmt(a.loAvg)} (${a.loN} videos).` : "Post more videos to compare high-scoring and low-scoring titles.";
-  setHTML($("rows"), a.v.slice().sort((x,y)=>y.views-x.views).slice(0,40).map(x => `<tr><td>${esc(x.title)}<span class="kind">${x.short?"Short":"Long-form"}</span></td><td class="r">${fmt(x.views)}${trend(x.views, a.med, 15)}</td><td class="r">${fmt(x.likes)}</td><td class="r">${fmt(x.comments)}</td><td class="r">${x.eng.toFixed(1)}%</td><td class="r">${fmt(x.vpd)}</td><td class="r"><span class="seo ${cls(x.seo)}">${x.seo}</span></td></tr>`).join(""), soft);
+  $("seoinsight").textContent = a.hiN >= 30 && a.loN >= 30 ? `Titles scoring 60+ are associated with ${fmt(a.hiAvg)} estimated day-7 views (${a.hiN} videos); titles under 45 with ${fmt(a.loAvg)} (${a.loN}). Association only, not causation.` : "At least 30 videos in each score group are needed for a useful comparison.";
+  const day7Median = median(a.v.filter(x=>x.age>=7).map(v7of));
+  setHTML($("rows"), a.v.slice().sort((x,y)=>y.views-x.views).slice(0,40).map(x => `<tr><td>${esc(x.title)}<span class="kind" title="Duration-only format proxy; aspect ratio and per-video YouTube content type are unavailable">${x.short?"Short-form proxy":"Long-form"}</span></td><td class="r" title="Age-normalized day-7 estimate versus the loaded-video median">${fmt(x.views)}${trend(v7of(x), day7Median, 15)}</td><td class="r">${fmt(x.likes)}</td><td class="r">${fmt(x.comments)}</td><td class="r">${x.eng.toFixed(1)}%</td><td class="r">${fmt(x.vpd)}</td><td class="r"><span class="seo ${cls(x.seo)}">${x.seo}</span></td></tr>`).join(""), soft);
   draftScore();
 }
 
@@ -548,14 +601,19 @@ function drawC2(a, soft){
 }
 function fcHTML(a){
   const cal = a.cal || {src:"model"}, kind = a.nextShort ? "Short" : "video";
-  const src = cal.src === "analytics" ? "Calibrated on your real daily views from Analytics" : cal.src === "tracked" ? "Calibrated on " + dhm(cal.span) + " of tracked views" : "Model only. Connect Analytics for a tighter forecast";
+  const src = cal.src === "analytics" ? "Scale-adjusted to recent Analytics views; not backtested" : cal.src === "tracked" ? "Scale-adjusted to " + dhm(cal.span) + " of tracked views; not backtested" : "Model only. Connect Analytics for a tighter forecast";
   const rate = a.subsPerDay < 1 ? a.subsPerDay.toFixed(2) : a.subsPerDay.toFixed(1);
+  const nextKind = a.nextPooled ? `${kind} (mixed-format proxy)` : kind;
+  const nextRange = a.nextNEff >= 3 ? `${a.nextPooled ? "Pooled historical" : "Historical"} 10th–90th percentile: ${fmt(a.nextLo)} to ${fmt(a.nextHi)}; indicative only` : "Too little comparable history for a reliable range";
+  const change30 = Math.max(-a.subsCurrent, a.subsPerDay*30), changeLabel = a.subsHidden ? "—" : (change30 > 0 ? "+" : "") + fmt(change30);
+  const milestone = a.subsHidden ? "—" : a.eta ? spanText(a.eta) : "n/a";
+  const milestoneNote = a.subsHidden ? "Subscriber count is hidden" : a.eta ? "Assumes the current pace holds" : a.subsPerDay <= 0 ? "Not reachable at the current net growth rate" : "Not enough data";
   return `
-    <div><div class="num">${fmt(a.nextViews)}</div><span>Expected views on your next ${kind} after 7 days<em>Typical range ${fmt(a.nextLo)} to ${fmt(a.nextHi)}, from your last ${a.nextN} uploads</em></span></div>
-    <div><div class="num">${fmt(a.forecast30)}</div><span>Projected views in the next 30 days<em>Likely ${fmt(a.f30lo)} to ${fmt(a.f30hi)}. ${src}</em></span></div>
-    <div><div class="num">+${fmt(a.subsPerDay*30)}</div><span>Subscribers expected in 30 days<em>${a.real ? "Blends your real 90-day growth with the view forecast" : "Estimated from the view forecast and your subscribers per view"}</em></span></div>
-    <div><div class="num">${a.eta ? spanText(a.eta) : "n/a"}</div><span>To reach ${fmt(a.ms)} subscribers at ${rate}/day<em>${a.eta ? "Assumes the current pace holds" : "Not growing at the moment"}</em></span></div>
-    <div><div class="num">${DAYS[a.dowAvg.indexOf(Math.max(...a.dowAvg))]}</div><span>Best weekday for views so far</span></div>`;
+    <div><div class="num">${a.nextN ? fmt(a.nextViews) : "—"}</div><span>Expected views on your next ${nextKind} after 7 days<em>${nextRange}</em></span></div>
+    <div><div class="num">${fmt(a.forecast30)}</div><span>Indicative views in the next 30 days<em>Indicative range ${fmt(a.f30lo)} to ${fmt(a.f30hi)}; fixed multipliers, not backtested. ${src}</em></span></div>
+    <div><div class="num">${changeLabel}</div><span>Projected net subscriber change in 30 days<em>${a.subsHidden ? "Hidden subscriber count; forecast unavailable" : a.real ? "Blends your real 90-day growth with the view forecast" : "Estimated from the view forecast and your subscribers per view"}</em></span></div>
+    <div><div class="num">${milestone}</div><span>To reach ${a.subsHidden ? "—" : fmt(a.ms)} subscribers at ${rate}/day<em>${milestoneNote}</em></span></div>
+    <div><div class="num">${a.bestDow == null ? "—" : DAYS[a.bestDow]}</div><span>Indicative best weekday at day 7</span></div>`;
 }
 
 function draftScore(){
@@ -664,13 +722,13 @@ function applySnapshot(s, id){
   AN = s.AN; writeAnalyticsCache(id, AN, s.t); learnRpm(AN.day, AN.rev); renderAnalytics();
   const sb = document.querySelector("#an .sub"); if (sb) sb.textContent = "Public YouTube Analytics report, last 90 days, updated " + hhmm(s.t) + ".";
 }
-async function loadSnapshot(quiet, force = false){
-  lastAnSlot = slotOf(Date.now(), CONFIG.ANALYTICS_MS);
-  const id = (D && D.id) || CONFIG.CHANNEL_ID;
+async function loadSnapshot(quiet, force = false, deferApply = false){
+  if (!deferApply) lastAnSlot = slotOf(Date.now(), CONFIG.ANALYTICS_MS);
+  const id = CONFIG.CHANNEL_ID || (D && D.id);
   if (!id){ if (!quiet) $("snap_status").textContent = "Shared Analytics is unavailable for this channel."; return; }
   if (!force){
     const cached = readAnalyticsCache(id);
-    if (cached){ applySnapshot(cached, id); return; }
+    if (cached){ if (deferApply) return cached; applySnapshot(cached, id); return; }
   }
   let j;
   const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 20000);
@@ -683,6 +741,7 @@ async function loadSnapshot(quiet, force = false){
     if (!quiet) $("snap_status").textContent = e.name === "AbortError" ? "The Analytics report timed out while loading. Try Refresh again." : "The shared report is not published yet. The dashboard owner needs to configure and run the Analytics publishing workflow.";
     return;
   } finally { clearTimeout(timeout); }
+  if (deferApply) return {AN:j.AN,t:j.t};
   applySnapshot(j, id);
 }
 function renderExtraReports(extra){
@@ -708,37 +767,44 @@ function renderExtraReports(extra){
     if (/ratio|share \(api value\)/i.test(column)) return value.toFixed(3);
     return fmt(value);
   };
-  const table = (title, columns, rows) => `<div class="wrap"><h3>${esc(title)}</h3><table><thead><tr>${columns.map(x=>`<th>${esc(x)}</th>`).join("")}</tr></thead><tbody>${rows.length ? rows.map(row=>`<tr>${columns.map((col,i)=>`<td>${numberCell(row[i],col)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${columns.length}">No rows returned. YouTube may omit reports for privacy, eligibility, or compatibility reasons.</td></tr>`}</tbody></table></div>`;
+  const table = (title, columns, rows) => `<details class="an-report"><summary>${esc(title)}</summary><div class="wrap"><table><thead><tr>${columns.map(x=>`<th>${esc(x)}</th>`).join("")}</tr></thead><tbody>${rows.length ? rows.map(row=>`<tr>${columns.map((col,i)=>`<td>${numberCell(row[i],col)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${columns.length}">No rows returned. YouTube may omit reports for privacy, eligibility, or compatibility reasons.</td></tr>`}</tbody></table></div></details>`;
   if (!extra){ setHTML($("extraReports"), '<p class="sub">This Analytics snapshot predates the expanded reports. Run the publishing workflow to regenerate it.</p>', false); return; }
-  const html = defs.map(([key,title,columns]) => table(title, columns, extra[key] || []));
+  const reports = Object.fromEntries(defs.map(([key,title,columns]) => [key, table(title, columns, extra[key] || [])]));
   const trafficRows = (extra.trafficDetails || []).flatMap(report => (report.rows || []).map(row=>[report.source,...row]));
-  html.push(table("Traffic source details",["Source","Detail","Views","Watch minutes"],trafficRows));
+  reports.trafficDetails = table("Traffic source details",["Source","Detail","Views","Watch minutes"],trafficRows);
   const retained = (extra.retention || []).flatMap(report => (report.rows || []).map(row=>[D.v.find(v=>v.id===report.videoId)?.title || report.videoId,...row]));
-  html.push(table("Audience retention for top 10 videos",["Video","Elapsed video ratio","Audience watch ratio","Relative retention performance"],retained));
-  setHTML($("extraReports"), html.join(""), ANR);
+  reports.retention = table("Audience retention for top 10 videos",["Video","Elapsed video ratio","Audience watch ratio","Relative retention performance"],retained);
+  const group = (title, keys) => `<details class="an-group"><summary>${title}<span>${keys.length} reports</span></summary><div class="an-report-grid">${keys.map(key=>reports[key]).join("")}</div></details>`;
+  setHTML($("extraReports"), [
+    group("Audience",["demographics","provinces","subscribedStatus"]),
+    group("Discovery and playback",["operatingSystem","playbackLocations","playbackLocationDetails","liveOrOnDemand","trafficDetails"]),
+    group("Engagement",["sharingService","cardTypes","annotationTypes","retention"]),
+    group("Monetization",["membershipCancellations","adType"])
+  ].join(""), ANR);
 }
 function renderAnalytics(){
   const soft = ANR; ANR = true;
   $("apitch").style.display = "none"; $("abody").style.display = "block"; // show first so charts get a real size
   const d = AN.day, sum = i => d.reduce((a,r) => a + (r[i]||0), 0), views = sum(1), mins = sum(2), net = sum(5) - sum(6), likes = sum(8), comments = sum(9);
   const engagement = views ? (likes + comments) / views * 100 : 0, subsPerThousand = views ? net / views * 1000 : 0;
-  const wAvg = i => views ? d.reduce((a,r) => a + r[i]*r[1], 0)/views : 0, ad = wAvg(3), ap = wAvg(4);
+  const wAvg = i => views ? d.reduce((a,r) => a + r[i]*r[1], 0)/views : 0, ad = views ? mins*60/views : 0, ap = wAvg(4);
   const h = Math.floor(d.length/2), A = d.slice(-h), B = d.slice(-2*h,-h);
   const tot = (r, f) => r.reduce((s,x)=>s+f(x),0), w = (r, i) => tot(r, x=>x[i]*x[1]) / tot(r, x=>x[1]);
+  const duration = rows => { const rowViews = tot(rows,x=>x[1]); return rowViews ? tot(rows,x=>x[2])*60/rowViews : 0; };
   const cmp = f => h ? trend(f(A), f(B), 5, `last ${h} days vs ${h} before`) : "";
   const sumRows = (rows, i) => rows ? rows.reduce((s,r)=>s+(r[i]||0),0) : 0;
   const weighted = (rows, value, weight) => { const n=sumRows(rows,weight); return n ? rows.reduce((s,r)=>s+(r[value]||0)*(r[weight]||0),0)/n : 0; };
-  const K = [[fmt(views),"Views",cmp(r=>tot(r,x=>x[1]))],[fmt(mins/60),"Watch hours",cmp(r=>tot(r,x=>x[2]))],[Math.floor(ad/60)+"m "+Math.round(ad%60)+"s","Average view duration",cmp(r=>w(r,3))],[ap.toFixed(0)+"%","Average share of video watched",cmp(r=>w(r,4))],[(net>=0?"+":"")+fmt(net),"Net subscribers",cmp(r=>tot(r,x=>x[5]-x[6]))],[fmt(sum(7)),"Shares",cmp(r=>tot(r,x=>x[7]))],[fmt(comments),"Comments",cmp(r=>tot(r,x=>x[9]||0))],[engagement.toFixed(2)+"%","Likes + comments / views",cmp(r=>{const v=tot(r,x=>x[1]);return v?tot(r,x=>(x[8]||0)+(x[9]||0))/v*100:0;})],[subsPerThousand.toFixed(2),"Net subs / 1K views",cmp(r=>{const v=tot(r,x=>x[1]);return v?tot(r,x=>(x[5]||0)-(x[6]||0))/v*1000:0;})]];
+  const K = [[fmt(views),"Views",cmp(r=>tot(r,x=>x[1]))],[fmt(mins/60),"Watch hours",cmp(r=>tot(r,x=>x[2]))],[Math.floor(ad/60)+"m "+Math.round(ad%60)+"s","Average view duration",cmp(duration)],[ap.toFixed(0)+"%","Average share of video watched",cmp(r=>w(r,4))],[(net>=0?"+":"")+fmt(net),"Net subscribers",cmp(r=>tot(r,x=>x[5]-x[6]))],[fmt(sum(7)),"Shares",cmp(r=>tot(r,x=>x[7]))],[fmt(comments),"Comments",cmp(r=>tot(r,x=>x[9]||0))],[engagement.toFixed(2)+"%","Likes + comments / views",cmp(r=>{const v=tot(r,x=>x[1]);return v?tot(r,x=>(x[8]||0)+(x[9]||0))/v*100:0;})],[subsPerThousand.toFixed(2),"Net subs / 1K views",cmp(r=>{const v=tot(r,x=>x[1]);return v?tot(r,x=>(x[5]||0)-(x[6]||0))/v*1000:0;})]];
   if (AN.dayMore?.length) K.push([fmt(sumRows(AN.dayMore,1)),"Engaged views",""],[fmt(sumRows(AN.dayMore,2)),"Dislikes",""],[fmt(sumRows(AN.dayMore,3)),"Videos added to playlists",""],[fmt(sumRows(AN.dayMore,4)),"Videos removed from playlists",""]);
   if (AN.audience?.length) K.push([fmt(sumRows(AN.audience,1)/AN.audience.length),"Average daily unique viewers",""],[fmt(sumRows(AN.audience,2)),"YouTube Premium views",""],[fmt(sumRows(AN.audience,3)/60),"Premium watch hours",""]);
   if (AN.cards?.length){ const imp=sumRows(AN.cards,1), clicks=sumRows(AN.cards,2), teaserImp=sumRows(AN.cards,4), teaserClicks=sumRows(AN.cards,5); K.push([fmt(imp),"Card impressions",""],[fmt(imp?clicks/imp*100:0)+"%","Card click-through rate",""],[fmt(teaserImp),"Card teaser impressions",""],[fmt(teaserImp?teaserClicks/teaserImp*100:0)+"%","Card teaser click rate",""]); }
   if (AN.annotations?.length){ const imp=sumRows(AN.annotations,1), clickable=sumRows(AN.annotations,2), clicks=sumRows(AN.annotations,3), closes=sumRows(AN.annotations,4), closable=sumRows(AN.annotations,5); K.push([fmt(imp),"Annotation impressions",""],[fmt(clickable?clicks/clickable*100:0)+"%","Annotation click-through rate",""],[fmt(closable?closes/closable*100:0)+"%","Annotation close rate",""]); }
   const rv = AN.rev, rt = r => r.reduce((s,x) => s + (x[1]||0), 0);
-  if (rv){ K.push(["$"+rt(rv).toFixed(2), "Estimated earnings", h ? trend(rt(rv.slice(-h)), rt(rv.slice(-2*h,-h)), 5, `last ${h} days vs ${h} before`) : ""]); }
-  else { const ss = shortShare(D, 0, 90); K.push([money(estEarn(d, ss)), "Estimated earnings (formula)", h ? trend(estEarn(A, ss), estEarn(B, ss), 5, `last ${h} days vs ${h} before`) : ""]); }
+  if (rv?.length){ K.push(["$"+rt(rv).toFixed(2), "Estimated earnings", h ? trend(rt(rv.slice(-h)), rt(rv.slice(-2*h,-h)), 5, `last ${h} days vs ${h} before`) : ""]); }
+  else { const ss = shortShare(D, 0, 90); K.push(["~"+money(estEarn(d, ss)), "Estimated earnings (modeled)", h ? trend(estEarn(A, ss), estEarn(B, ss), 5, `last ${h} days vs ${h} before`) : ""]); }
   K.push([fmt(sum(8)), "Likes", cmp(r=>tot(r,x=>x[8]||0))]);
   if (AN.revMore?.length) K.push([money(sumRows(AN.revMore,1)),"Estimated ad revenue",""],[money(sumRows(AN.revMore,2)),"Gross revenue",""],[money(sumRows(AN.revMore,3)),"YouTube Premium revenue",""],[fmt(sumRows(AN.revMore,4)),"Monetized playbacks",""],[fmt(sumRows(AN.revMore,5)),"Ad impressions",""],["$"+weighted(AN.revMore,6,4).toFixed(2),"Playback-based CPM",""],["$"+weighted(AN.revMore,7,5).toFixed(2),"CPM",""]);
-  setHTML($("akpis"), K.map(k => `<div><span class="num">${k[0]}</span><span class="l">${k[1]}</span>${k[2]}</div>`).join(""), soft);
+  setHTML($("akpis"), K.map(k => `<div><span class="num${/earnings/i.test(k[1]) ? " earnings" : ""}">${k[0]}</span><span class="l">${k[1]}</span>${k[2]}</div>`).join(""), soft);
   chart("c5", {type:"bar", data:{labels:d.map(r=>r[0].slice(5)), datasets:[{type:"line",label:"Views",data:d.map(r=>r[1]),borderColor:"#24a8ba",borderWidth:2,pointRadius:0,tension:.25,yAxisID:"y"},{label:"Net subscribers",data:d.map(r=>r[5]-r[6]),backgroundColor:"rgba(239,189,107,.78)",yAxisID:"y1"}]}, options:{scales:{x:{ticks:{maxTicksLimit:8}},y:{position:"left"},y1:{position:"right",grid:{drawOnChartArea:false}}}}}, soft);
   chart("c6", {type:"bar", data:{labels:AN.traffic.map(r=>r[0].replace(/_/g," ").toLowerCase()), datasets:[{data:AN.traffic.map(r=>r[1]),backgroundColor:"#24a8ba"}]}, options:{indexAxis:"y",plugins:{legend:{display:false}}}}, soft);
   const geoMore = new Map((AN.geoMore || []).map(r=>[r[0],r]));
@@ -876,7 +942,11 @@ if (!document.hidden) runRefresh(false);
 (function(){
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   function countUp(root){ if (reduce) return; root.querySelectorAll(".num").forEach(el => {
-    if (el.dataset.c) return; const t = el.textContent, m = t.match(/^([^\d]*)(\d[\d,]*\.?\d*)(.*)$/); if (!m) return; el.dataset.c = 1; el._counting = true;
+    if (el.classList.contains("earnings")) return;
+    if (el.dataset.c) return;
+    const t = el.textContent;
+    if (t.trim().startsWith("$")){ el.dataset.c = 1; return; }
+    const m = t.match(/^([^\d]*)(\d[\d,]*\.?\d*)(.*)$/); if (!m) return; el.dataset.c = 1; el._counting = true;
     const target = parseFloat(m[2].replace(/,/g,"")), dec = (m[2].split(".")[1]||"").length, comma = m[2].includes(","), t0 = performance.now();
     (function f(n){ const p = Math.min(1,Math.max(0,n-t0)/1300), e = 1-Math.pow(1-p,4); let s = (target*e).toFixed(dec);
       if (comma) s = Number(s).toLocaleString(undefined,{minimumFractionDigits:dec,maximumFractionDigits:dec});
