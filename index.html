@@ -21,7 +21,7 @@ window.chartLibraryReady = new Promise(resolve => {
   load(0);
 });
 </script>
-<link rel="stylesheet" href="style.css?v=20261127-4">
+<link rel="stylesheet" href="style.css?v=20261127-6">
 </head>
 <body>
 <div class="app">
@@ -75,6 +75,7 @@ window.chartLibraryReady = new Promise(resolve => {
       <div id="extraReports"></div>
       <p class="sub" style="margin-top:14px">Video thumbnail impressions and thumbnail click-through rate are not included in these API reports. Annotation and card metrics appear when YouTube returns them for your channel.</p>
     </div></section>
+  <section id="supplemental"><h2>Supplemental video signals</h2><p class="sub">Optional external signals only: estimated dislikes and rating, hidden tags, Most Replayed heatmaps, captions, regional trends, and recommendations. Official YouTube counts remain authoritative.</p><div id="supplementalBody"><p class="sub">Waiting for channel data…</p></div></section>
   <div class="grid" id="perf">
     <section><h2>Views per video</h2><p class="sub">Each bar is one upload, oldest to newest.</p><div class="cv"><canvas id="c1"></canvas></div></section>
     <section><h2>Cumulative views + 30-day forecast</h2><p class="sub">Dashed line is the 30-day forecast from the growth model.</p><div class="cv"><canvas id="c2"></canvas></div></section>
@@ -155,5 +156,5 @@ window.chartLibraryReady = new Promise(resolve => {
 </div></div>
 
 <script src="config.js"></script>
-<script src="app.js?v=20261127-4"></script>
+<script src="app.js?v=20261127-6"></script>
 </body></html>

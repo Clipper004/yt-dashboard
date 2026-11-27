@@ -30,3 +30,8 @@ Anyone who can access the dashboard can also access all published Analytics, inc
 6. Share the dashboard link. No password is required.
 
 GitHub pauses scheduled workflows after 60 days without repo activity; re-enable them in the Actions tab if that happens.
+
+## Supplemental signals
+The deploy workflow also writes a separate `data/supplemental-<channelId>.json` snapshot. These are optional signals only: Return YouTube Dislike contributes estimated dislikes and rating, with the ratio calculated from its estimated dislikes and official YouTube likes; yt-dlp contributes Most Replayed heatmaps, hidden tags, and English manual/automatic captions; Invidious contributes regional trending video IDs and recommended-video IDs. They never replace official YouTube counts or Analytics metrics.
+
+These supplemental snapshots are public with the dashboard. They may include hidden tags and caption text, so publish them only if that is acceptable. Provider calls have timeouts and fail independently; a missing provider does not block official Analytics publishing. Optional GitHub Actions variables: `INVIDIOUS_INSTANCES` (comma-separated base URLs), `INVIDIOUS_REGIONS` (comma-separated region codes), and `YTDLP_SUB_LANGS` (yt-dlp language selector; defaults to `en.*,en`). The workflow samples the top 10 official Analytics video IDs by default.

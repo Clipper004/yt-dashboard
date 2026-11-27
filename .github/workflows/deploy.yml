@@ -33,6 +33,18 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           CHANNELS_JSON: ${{ secrets.CHANNELS_JSON }}
+      - name: Install optional yt-dlp provider
+        run: |
+          python -m pip install --user yt-dlp || echo "yt-dlp installation failed; its supplemental signals will be skipped"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Fetch supplemental signals
+        run: node scripts/fetch-supplemental.mjs
+        env:
+          CHANNELS_JSON: ${{ secrets.CHANNELS_JSON }}
+          INVIDIOUS_INSTANCES: ${{ vars.INVIDIOUS_INSTANCES }}
+          INVIDIOUS_REGIONS: ${{ vars.INVIDIOUS_REGIONS }}
+          YTDLP_SUB_LANGS: ${{ vars.YTDLP_SUB_LANGS }}
+          SUPPLEMENTAL_VIDEO_LIMIT: "10"
       - name: Collect site files
         run: |
           mkdir _site

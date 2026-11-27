@@ -102,6 +102,7 @@ const SINGAPORE_WEEKDAY = new Intl.DateTimeFormat("en-US", {timeZone:"Asia/Singa
 const STOP = new Set("the a an of in on to and for is are was with this that how why what you your i it at by from or as be vs".split(" "));
 const POWER = ["secret","truth","shocking","never","best","worst","insane","real","why","how","exposed","ranked","impossible","most","least","hidden","crazy","new"];
 let charts = {}, D = null, CUR = null, SNAP = [], WH365 = null, busy = false, lastUpdate = 0, lastTry = 0, lastSlot = -1, lastAnSlot = -1, RKEY = null, ANR = false, bootN = 0;
+const SUPPLEMENTAL_LOADS = new Map();
 
 /* ===== Smooth updates: patch the live DOM and shuffle only the digits that changed ===== */
 const REDUCE = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -872,6 +873,67 @@ function renderAnalytics(){
   if (CUR && D){ buildForecast(CUR, D); setHTML($("fc"), fcHTML(D), true); drawC2(D, true); renderKpis(CUR, D, true); }
 }
 
+function renderSupplemental(data){
+  const root = $("supplementalBody");
+  if (!root) return;
+  const videos = data.videos || {}, ids = Object.keys(videos);
+  const titles = new Map((D?.v || []).map(video=>[video.id,video.title]));
+  const link = id => /^[\w-]{11}$/.test(id || "") ? `<a href="https://www.youtube.com/watch?v=${encodeURIComponent(id)}" target="_blank" rel="noopener">${esc(titles.get(id) || id)}</a>` : esc(id);
+  const heatmapHTML = points => {
+    if (!Array.isArray(points) || !points.length) return '<p class="sub">No Most Replayed heatmap available.</p>';
+    const maxTime=Math.max(1,...points.map(point=>Number(point.endTime)||0));
+    return `<div class="supp-heatmap" role="img" aria-label="Most Replayed engagement heatmap">${points.map(point=>{
+      const start=Math.max(0,Number(point.startTime)||0), end=Math.max(start,Number(point.endTime)||start), level=Math.max(0,Math.min(1,Number(point.intensity)||0));
+      return `<i title="${Math.round(start)}–${Math.round(end)} sec" style="left:${start/maxTime*100}%;width:${Math.max(.5,(end-start)/maxTime*100)}%;opacity:${.2+level*.8}"></i>`;
+    }).join("")}</div>`;
+  };
+  const videoBlocks=ids.map(id=>{
+    const signal=videos[id] || {}, dislike=signal.returnYouTubeDislike, extra=signal.ytDlp || {};
+    const tags=Array.isArray(extra.tags) ? extra.tags : [], captions=Array.isArray(extra.captions) ? extra.captions : [];
+    const dislikeHTML=dislike ? `<p>Estimated dislikes: <b>${dislike.dislikes==null?"—":fmt(dislike.dislikes)}</b> <span>Rating ${dislike.rating==null?"—":dislike.rating.toFixed(3)} · Official like/dislike ratio ${dislike.likeToDislikeRatio==null?"—":dislike.likeToDislikeRatio.toFixed(2)+":1"}</span></p>` : '<p class="sub">No Return YouTube Dislike estimate available.</p>';
+    const tagsHTML=tags.length ? `<div class="supp-tags">${tags.map(tag=>`<span>${esc(tag)}</span>`).join("")}</div>` : '<p class="sub">No hidden tags returned.</p>';
+    const captionsHTML=captions.length ? captions.map(track=>`<details class="supp-caption"><summary>${esc(track.language || "Unknown language")} · ${track.type==="automatic"?"Auto-generated":"Manual"}</summary><pre>${esc(track.text || "")}</pre></details>`).join("") : '<p class="sub">No English captions available.</p>';
+    return `<details class="an-report supp-video"><summary>${link(id)}</summary><div class="supp-video-content"><h4>Return YouTube Dislike</h4>${dislikeHTML}<h4>Hidden tags</h4>${tagsHTML}<h4>Most Replayed</h4>${heatmapHTML(extra.heatmap)}<h4>Captions</h4>${captionsHTML}</div></details>`;
+  }).join("");
+  const invidious=data.invidious || {}, trending=invidious.trending || {}, recommendations=invidious.recommendations || {};
+  const trendingHTML=Object.entries(trending).map(([region,items])=>`<details class="supp-list"><summary>${esc(region)} trending</summary><ol>${(items || []).map(id=>`<li>${link(id)}</li>`).join("") || "<li>No results.</li>"}</ol></details>`).join("");
+  const recommendedHTML=Object.entries(recommendations).filter(([,items])=>items?.length).map(([id,items])=>`<details class="supp-list"><summary>Related to ${link(id)}</summary><ol>${items.map(item=>`<li>${link(item)}</li>`).join("")}</ol></details>`).join("");
+  if (!ids.length && !trendingHTML && !recommendedHTML){
+    setHTML(root,'<p class="sub">No supplemental signals are available yet. The official YouTube dashboard continues to work independently.</p>',false);
+    return;
+  }
+  setHTML(root,`${trendingHTML||""}${recommendedHTML||""}<div class="supp-video-grid">${videoBlocks}</div>`,false);
+}
+
+async function loadSupplemental(channelId){
+  const root=$("supplementalBody");
+  if (!root || !channelId) return;
+  if (SUPPLEMENTAL_LOADS.has(channelId)){
+    const cached=await SUPPLEMENTAL_LOADS.get(channelId);
+    if (D?.id===channelId){
+      if (cached) renderSupplemental(cached);
+      else setHTML(root,'<p class="sub">Supplemental report not published for this channel yet.</p>',false);
+    }
+    return;
+  }
+  setHTML(root,'<p class="sub">Loading optional supplemental signals…</p>',false);
+  const load=(async()=>{
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
+    try{
+      const response=await fetch("data/supplemental-"+encodeURIComponent(channelId)+".json?t="+Date.now(),{cache:"no-store",signal:controller.signal});
+      if (!response.ok) return null;
+      const report=await response.json();
+      return report && report.channelId===channelId ? report : null;
+    }catch(error){ return null; }
+    finally{ clearTimeout(timeout); }
+  })();
+  SUPPLEMENTAL_LOADS.set(channelId,load);
+  const report=await load;
+  if (D?.id!==channelId) return;
+  if (report) renderSupplemental(report);
+  else setHTML(root,'<p class="sub">Supplemental report not published for this channel yet. Official YouTube metrics are unaffected.</p>',false);
+}
+
 /* ===== Prompt builder ===== */
 function fv(id){ return $(id).value.trim(); }
 function buildPrompt(){
@@ -966,6 +1028,7 @@ async function boot(force = false){
     if (!d.vids.length) throw new Error("No public videos found on this channel.");
     CUR = d; SNAP = d.demo ? [] : recordSnap(d, !!cached);
     D = analyze(d); D.id = d.id; render(d, D, soft && !d.demo);
+    if (!d.demo) loadSupplemental(d.id);
     lastUpdate = cached ? cached.t : Date.now(); if (!cached && !d.demo) writePublicCache(key, d, lastUpdate);
     RKEY = d.demo ? null : key;
     if (soft) [...$("msg").children].forEach(c => { if (!c.classList.contains("anw")) c.remove(); });
