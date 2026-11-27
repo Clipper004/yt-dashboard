@@ -607,7 +607,7 @@ function applySnapshot(s, id, pw){
 }
 async function loadSnapshot(quiet){
   lastAnSlot = slotOf(Date.now(), CONFIG.ANALYTICS_MS);
-  const id = D && D.id;
+  const id = (D && D.id) || CONFIG.CHANNEL_ID;
   if (!id || !(window.crypto && crypto.subtle)){ if (!quiet) $("snap_status").textContent = "Shared Analytics is unavailable for this channel or browser."; return; }
   let j;
   try { const r = await fetch("data/analytics-" + id + ".json?t=" + Date.now(), {cache:"no-store"}); if (!r.ok) throw new Error("report not found"); j = await r.json(); }
@@ -623,7 +623,7 @@ async function loadSnapshot(quiet){
   $("snapentry").style.display = "block"; $("snap_pw").focus();
 }
 async function unlockSnapshot(){
-  const id = D && D.id, pw = $("snap_pw").value;
+  const id = (D && D.id) || CONFIG.CHANNEL_ID, pw = $("snap_pw").value;
   if (!pw){ $("snap_warn").textContent = "Enter the shared password."; return; }
   if (!SNAPSHOT) await loadSnapshot(false);
   if (!SNAPSHOT) return;
@@ -764,7 +764,7 @@ async function boot(force = false){
     if (me !== bootN) return;
     if (!d.vids.length) throw new Error("No public videos found on this channel.");
     CUR = d; SNAP = d.demo ? [] : recordSnap(d, !!cached);
-    D = analyze(d); render(d, D, soft && !d.demo);
+    D = analyze(d); D.id = d.id; render(d, D, soft && !d.demo);
     lastUpdate = cached ? cached.t : Date.now(); if (!cached && !d.demo) writePublicCache(key, d, lastUpdate);
     RKEY = d.demo ? null : key;
     if (soft) [...$("msg").children].forEach(c => { if (!c.classList.contains("anw")) c.remove(); });
