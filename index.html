@@ -5,8 +5,23 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="shortcut icon" href="favicon.svg" type="image/svg+xml">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20261127">
+<script>
+window.chartLibraryReady = new Promise(resolve => {
+  const sources = [
+    "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js",
+    "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+  ];
+  const load = index => {
+    const script = document.createElement("script");
+    script.src = sources[index];
+    script.onload = () => resolve(true);
+    script.onerror = () => index + 1 < sources.length ? load(index + 1) : resolve(false);
+    document.head.appendChild(script);
+  };
+  load(0);
+});
+</script>
+<link rel="stylesheet" href="style.css?v=20261127-2">
 </head>
 <body>
 <div class="app">
@@ -140,5 +155,5 @@
 </div></div>
 
 <script src="config.js"></script>
-<script src="app.js?v=20261127"></script>
+<script src="app.js?v=20261127-2"></script>
 </body></html>

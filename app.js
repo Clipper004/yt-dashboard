@@ -403,12 +403,22 @@ function analyze(d){
 }
 
 function chart(id, cfg, soft){
+  if (!window.Chart){
+    const canvas = $(id);
+    if (canvas){
+      const notice = document.createElement("p");
+      notice.className = "chart-unavailable";
+      notice.textContent = "Charts could not load. Check your connection and reload.";
+      canvas.replaceWith(notice);
+    }
+    return;
+  }
   const old = charts[id];
   if (soft && old && old._ty === cfg.type){
     old.data.labels = cfg.data.labels;
     if (old.data.datasets.length === cfg.data.datasets.length) cfg.data.datasets.forEach((ds, i) => Object.assign(old.data.datasets[i], ds));
     else old.data.datasets = cfg.data.datasets;
-    old.update(); return;
+    old.update(); requestAnimationFrame(() => { if (charts[id] === old){ old.resize(); old.update("none"); } }); return;
   }
   if (old) old.destroy();
   Object.assign(Chart.defaults,{color:"#c1d5d9",borderColor:"rgba(132,196,205,.2)"}); Chart.defaults.font.family = "Plus Jakarta Sans, system-ui, sans-serif"; Chart.defaults.font.size = 12;
@@ -418,6 +428,8 @@ function chart(id, cfg, soft){
   Object.assign(Chart.defaults.plugins.tooltip,{backgroundColor:"#02161c",borderColor:"#1b5260",borderWidth:1,padding:12,cornerRadius:7,titleColor:"#ffffff",bodyColor:"#d8edf0",boxPadding:4});
   Chart.defaults.plugins.legend.labels.usePointStyle = false; Chart.defaults.plugins.legend.labels.boxWidth = 10; Chart.defaults.plugins.legend.labels.boxHeight = 3;
   charts[id] = new Chart($(id), cfg); charts[id]._ty = cfg.type;
+  const instance = charts[id];
+  requestAnimationFrame(() => { if (charts[id] === instance){ instance.resize(); instance.update("none"); } });
 }
 
 const ARROW = {up:"M4 12L12 4M6 4h6v6", down:"M4 4l8 8M12 6v6H6", flat:"M2.5 8h11M9.5 4l4 4-4 4"};
@@ -744,6 +756,26 @@ async function loadSnapshot(quiet, force = false, deferApply = false){
   if (deferApply) return {AN:j.AN,t:j.t};
   applySnapshot(j, id);
 }
+const displayLabel = value => {
+  const text = String(value ?? "");
+  const known = {
+    ADVERTISING:"Advertising", CAMPAIGN_CARD:"Campaign cards", END_SCREEN:"End screens",
+    EXT_URL:"External", HASHTAGS:"Hashtags", LIVE_REDIRECT:"Live redirects",
+    NO_LINK_OTHER:"Other YouTube features", NOTIFICATION:"Notifications", PLAYLIST:"Playlists",
+    PRODUCT_PAGE:"Product pages", PROMOTED:"Promoted", RELATED_VIDEO:"Related videos",
+    SOUND_PAGE:"Sound pages", SUBSCRIBER:"Subscribers", YT_CHANNEL:"YouTube channel",
+    YT_OTHER_PAGE:"Other YouTube pages", YT_SEARCH:"YouTube Search", SMART_TV:"Smart TV",
+    MACINTOSH:"Mac", IOS:"iOS", ANDROID:"Android", WEBOS:"webOS", TV:"TV", US:"United States"
+  };
+  if (known[text]) return known[text];
+  if (!/^[A-Z0-9_]+$/.test(text)) return text;
+  return text.replace(/_/g," ").toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase());
+};
+const countryName = code => {
+  try { return new Intl.DisplayNames([navigator.language || "en"], {type:"region"}).of(code) || code; }
+  catch(e) { return code; }
+};
+
 function renderExtraReports(extra){
   const defs = [
     ["operatingSystem","Operating systems",["Operating system","Views","Watch minutes","Average duration (sec)"]],
@@ -767,7 +799,7 @@ function renderExtraReports(extra){
     if (/ratio|share \(api value\)/i.test(column)) return value.toFixed(3);
     return fmt(value);
   };
-  const table = (title, columns, rows) => `<details class="an-report"><summary>${esc(title)}</summary><div class="wrap"><table><thead><tr>${columns.map(x=>`<th>${esc(x)}</th>`).join("")}</tr></thead><tbody>${rows.length ? rows.map(row=>`<tr>${columns.map((col,i)=>`<td>${numberCell(row[i],col)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${columns.length}">No rows returned. YouTube may omit reports for privacy, eligibility, or compatibility reasons.</td></tr>`}</tbody></table></div></details>`;
+  const table = (title, columns, rows) => `<details class="an-report"><summary>${esc(title)}</summary><div class="wrap"><table><thead><tr>${columns.map(x=>`<th>${esc(x)}</th>`).join("")}</tr></thead><tbody>${rows.length ? rows.map(row=>`<tr>${columns.map((col,i)=>`<td>${i===0?esc(displayLabel(row[i])):numberCell(row[i],col)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${columns.length}">No rows returned. YouTube may omit reports for privacy, eligibility, or compatibility reasons.</td></tr>`}</tbody></table></div></details>`;
   if (!extra){ setHTML($("extraReports"), '<p class="sub">This Analytics snapshot predates the expanded reports. Run the publishing workflow to regenerate it.</p>', false); return; }
   const reports = Object.fromEntries(defs.map(([key,title,columns]) => [key, table(title, columns, extra[key] || [])]));
   const trafficRows = (extra.trafficDetails || []).flatMap(report => (report.rows || []).map(row=>[report.source,...row]));
@@ -806,16 +838,18 @@ function renderAnalytics(){
   if (AN.revMore?.length) K.push([money(sumRows(AN.revMore,1)),"Estimated ad revenue",""],[money(sumRows(AN.revMore,2)),"Gross revenue",""],[money(sumRows(AN.revMore,3)),"YouTube Premium revenue",""],[fmt(sumRows(AN.revMore,4)),"Monetized playbacks",""],[fmt(sumRows(AN.revMore,5)),"Ad impressions",""],["$"+weighted(AN.revMore,6,4).toFixed(2),"Playback-based CPM",""],["$"+weighted(AN.revMore,7,5).toFixed(2),"CPM",""]);
   setHTML($("akpis"), K.map(k => `<div><span class="num${/earnings/i.test(k[1]) ? " earnings" : ""}">${k[0]}</span><span class="l">${k[1]}</span>${k[2]}</div>`).join(""), soft);
   chart("c5", {type:"bar", data:{labels:d.map(r=>r[0].slice(5)), datasets:[{type:"line",label:"Views",data:d.map(r=>r[1]),borderColor:"#24a8ba",borderWidth:2,pointRadius:0,tension:.25,yAxisID:"y"},{label:"Net subscribers",data:d.map(r=>r[5]-r[6]),backgroundColor:"rgba(239,189,107,.78)",yAxisID:"y1"}]}, options:{scales:{x:{ticks:{maxTicksLimit:8}},y:{position:"left"},y1:{position:"right",grid:{drawOnChartArea:false}}}}}, soft);
-  chart("c6", {type:"bar", data:{labels:AN.traffic.map(r=>r[0].replace(/_/g," ").toLowerCase()), datasets:[{data:AN.traffic.map(r=>r[1]),backgroundColor:"#24a8ba"}]}, options:{indexAxis:"y",plugins:{legend:{display:false}}}}, soft);
+  chart("c6", {type:"bar", data:{labels:AN.traffic.map(r=>displayLabel(r[0])), datasets:[{data:AN.traffic.map(r=>r[1]),backgroundColor:"#24a8ba"}]}, options:{indexAxis:"y",plugins:{legend:{display:false}}}}, soft);
+  const avgDuration = (row, more) => more && more[2] != null ? more[2] : row[1] ? row[2]*60/row[1] : null;
+  const durationText = seconds => seconds == null ? "—" : clock(Math.round(seconds));
   const geoMore = new Map((AN.geoMore || []).map(r=>[r[0],r]));
-  setHTML($("geo"), AN.geo.map(r => { const e=geoMore.get(r[0]); return `<tr><td>${esc(r[0])}</td><td class="r">${fmt(r[1])}</td><td class="r">${fmt(r[2]/60)}</td><td class="r">${e?clock(Math.round(e[2]||0)):"—"}</td><td class="r">${e?(e[3]||0).toFixed(1)+"%":"—"}</td><td class="r">${e?fmt(e[4]):"—"}</td><td class="r">${e?fmt((e[5]||0)+(e[6]||0)):"—"}</td><td class="r">${e?fmt(e[7]):"—"}</td></tr>`; }).join(""), soft);
+  setHTML($("geo"), AN.geo.map(r => { const e=geoMore.get(r[0]); return `<tr><td>${esc(countryName(r[0]))}</td><td class="r">${fmt(r[1])}</td><td class="r">${fmt(r[2]/60)}</td><td class="r">${durationText(avgDuration(r,e))}</td><td class="r">${e&&e[3]!=null?e[3].toFixed(1)+"%":"—"}</td><td class="r">${e&&e[4]!=null?fmt(e[4]):"—"}</td><td class="r">${e&&e[5]!=null?fmt(e[5]+(e[6]||0)):"—"}</td><td class="r">${e&&e[7]!=null?fmt(e[7]):"—"}</td></tr>`; }).join(""), soft);
   const trafficMore = new Map((AN.trafficMore || []).map(r=>[r[0],r]));
-  setHTML($("trafficRows"), AN.traffic.map(r => { const e=trafficMore.get(r[0]); return `<tr><td>${esc(r[0].replace(/_/g," "))}</td><td class="r">${fmt(r[1])}</td><td class="r">${fmt(r[2]/60)}</td><td class="r">${e?clock(Math.round(e[2]||0)):"—"}</td><td class="r">${e?(e[3]||0).toFixed(1)+"%":"—"}</td><td class="r">${e?fmt(e[4]):"—"}</td><td class="r">${e?fmt((e[5]||0)+(e[6]||0)):"—"}</td><td class="r">${e?fmt(e[7]):"—"}</td></tr>`; }).join(""), soft);
+  setHTML($("trafficRows"), AN.traffic.map(r => { const e=trafficMore.get(r[0]); return `<tr><td>${esc(displayLabel(r[0]))}</td><td class="r">${fmt(r[1])}</td><td class="r">${fmt(r[2]/60)}</td><td class="r">${durationText(avgDuration(r,e))}</td><td class="r">${e&&e[3]!=null?e[3].toFixed(1)+"%":"—"}</td><td class="r">${e&&e[4]!=null?fmt(e[4]):"—"}</td><td class="r">${e&&e[5]!=null?fmt(e[5]+(e[6]||0)):"—"}</td><td class="r">${e&&e[7]!=null?fmt(e[7]):"—"}</td></tr>`; }).join(""), soft);
   const device = AN.device || [];
   const deviceMore = new Map((AN.deviceMore || []).map(r=>[r[0],r]));
-  setHTML($("devices"), device.map(r => { const e=deviceMore.get(r[0]); return `<tr><td>${esc(r[0].replace(/_/g," ").toLowerCase().replace(/\b[a-z]/g,c=>c.toUpperCase()))}</td><td class="r">${fmt(r[1])}</td><td class="r">${fmt(r[2]/60)}</td><td class="r">${e?clock(Math.round(e[2]||0)):"—"}</td><td class="r">${e?(e[3]||0).toFixed(1)+"%":"—"}</td><td class="r">${e&&e[1]?((e[4]+e[5])/e[1]*100).toFixed(2)+"%":"—"}</td><td class="r">${e?fmt(e[6]||0):"—"}</td></tr>`; }).join(""), soft);
+  setHTML($("devices"), device.map(r => { const e=deviceMore.get(r[0]); return `<tr><td>${esc(r[0].replace(/_/g," ").toLowerCase().replace(/\b[a-z]/g,c=>c.toUpperCase()))}</td><td class="r">${fmt(r[1])}</td><td class="r">${fmt(r[2]/60)}</td><td class="r">${durationText(avgDuration(r,e))}</td><td class="r">${e&&e[3]!=null?e[3].toFixed(1)+"%":"—"}</td><td class="r">${e&&e[1]&&e[4]!=null&&e[5]!=null?((e[4]+e[5])/e[1]*100).toFixed(2)+"%":"—"}</td><td class="r">${e&&e[6]!=null?fmt(e[6]):"—"}</td></tr>`; }).join(""), soft);
   const vidMore = new Map((AN.vidMore || []).map(r=>[r[0],r]));
-  setHTML($("ret"), AN.vid.map(r => { const v=D.v.find(x=>x.id===r[0]), e=vidMore.get(r[0]); return `<tr><td>${esc(v?v.title:r[0])}</td><td class="r">${fmt(r[1])}</td><td class="r">${r[2].toFixed(0)}%</td><td class="r">${fmt(r[3])}</td><td class="r">${e?fmt(e[2]/60):"—"}</td><td class="r">${e?clock(Math.round(e[3]||0)):"—"}</td><td class="r">${e?fmt(e[4]):"—"}</td><td class="r">${e?fmt(e[6]):"—"}</td><td class="r">${e?fmt(e[7]):"—"}</td><td class="r">${e?fmt(e[5]):"—"}</td><td class="r">${e?fmt(e[8]):"—"}</td><td class="r">${e?fmt(e[9]):"—"}</td><td class="r">${e?fmt(e[10]):"—"}</td></tr>`; }).join(""), soft);
+  setHTML($("ret"), AN.vid.map(r => { const v=D.v.find(x=>x.id===r[0]), e=vidMore.get(r[0]); return `<tr><td>${esc(v?v.title:r[0])}</td><td class="r">${fmt(r[1])}</td><td class="r">${r[2].toFixed(0)}%</td><td class="r">${fmt(r[3])}</td><td class="r">${e&&e[2]!=null?fmt(e[2]/60):"—"}</td><td class="r">${e&&e[3]!=null?clock(Math.round(e[3])):"—"}</td><td class="r">${e&&e[4]!=null?fmt(e[4]):"—"}</td><td class="r">${e&&e[6]!=null?fmt(e[6]):"—"}</td><td class="r">${e&&e[7]!=null?fmt(e[7]):"—"}</td><td class="r">${e&&e[5]!=null?fmt(e[5]):"—"}</td><td class="r">${e&&e[8]!=null?fmt(e[8]):"—"}</td><td class="r">${e&&e[9]!=null?fmt(e[9]):"—"}</td><td class="r">${e&&e[10]!=null?fmt(e[10]):"—"}</td></tr>`; }).join(""), soft);
   const playlists = AN.playlist || [];
   setHTML($("playlists"), playlists.map(r=>`<tr><td>${esc(r[0])}</td><td class="r">${fmt(r[1])}</td><td class="r">${fmt(r[2]/60)}</td><td class="r">${fmt(r[3])}</td><td class="r">${fmt(r[4])}</td><td class="r">${clock(Math.round(r[5]))}</td></tr>`).join(""), soft);
   renderExtraReports(AN.extra);
@@ -929,14 +963,16 @@ async function boot(force = false){
     else { $("msg").innerHTML = `<p class="err">Could not load your channel: ${esc(e.message)} Check your key and channel ID. <button onclick="openGuide()">Open setup guide</button></p>`; $("cmeta").textContent = "Not connected"; }
   } finally { if (me === bootN){ busy = false; tick(); } }
 }
-applyCh();
-renderSel(); initUI();
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) return;
-  if (!D) runRefresh(false);
-  else tick();
+window.chartLibraryReady.then(() => {
+  applyCh();
+  renderSel(); initUI();
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) return;
+    if (!D) runRefresh(false);
+    else tick();
+  });
+  if (!document.hidden) runRefresh(false);
 });
-if (!document.hidden) runRefresh(false);
 
 /* ===== Visual polish: count-up numbers + scroll reveal ===== */
 (function(){

@@ -103,7 +103,7 @@ h3{margin-bottom:12px}
 #akpis .num{display:block;font-size:30px;line-height:1.15}
 #akpis span.l{display:block;color:var(--mut);font-size:12.5px}
 #abody .grid{margin-bottom:36px}
-.wrap{overflow:auto;max-height:560px}
+.wrap{overflow:auto;max-height:none}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{text-align:left;padding:13px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
 th{color:var(--dim);font-weight:600;font-size:12px;position:sticky;top:0;background:var(--bg);z-index:1}
@@ -306,6 +306,7 @@ h2+.sub{margin:5px 0 22px}
 .fc span em{color:var(--dim)}
 .grid{gap:34px 38px}
 .cv{height:260px;padding:10px;border:1px solid var(--line);border-radius:8px;background:#031a20}
+.chart-unavailable{display:grid;place-items:center;height:100%;margin:0;color:var(--mut);text-align:center}
 #akpis{gap:20px 26px;margin-bottom:30px}
 #akpis>div{min-width:0;padding-top:12px;border-top:2px solid #17444f}
 #akpis>div:nth-child(4n+1){border-top-color:var(--blue2)}
@@ -328,14 +329,17 @@ h2+.sub{margin:5px 0 22px}
 .an-report[open] summary{border-radius:8px 8px 0 0}
 .an-report[open] summary::after{content:"-"}
 .an-report .wrap{min-width:0;max-height:430px;margin:0;border-top:0;border-radius:0 0 8px 8px}
-.wrap{max-height:520px;border:1px solid var(--line);border-radius:8px;background:#031a20}
+.wrap{max-height:none;border:1px solid var(--line);border-radius:8px;background:#031a20}
 .wrap.wide{grid-column:1/-1}
 table.wide{min-width:980px}
 table{font-size:12.5px}
-th,td{padding:11px 10px;border-bottom-color:#17444f}
+th,td{padding:14px 16px;border-bottom-color:#17444f}
 th{color:var(--mut);background:#031a20;font-size:11.5px}
 td:first-child{min-width:150px}
 tbody tr:hover{background:#05252b}
+#abody>.wrap.wide{margin-bottom:30px}
+.wrap>h3{margin:0;padding:16px 16px 8px}
+.an-report .wrap{max-height:none}
 input[type=text],input[type=password],select#chsel,textarea{background:#031a20;border-color:#15363d;border-radius:6px;color:var(--ink)}
 input:focus,textarea:focus,select:focus{border-color:var(--blue2);box-shadow:0 0 0 3px rgba(36,168,186,.16)}
 select#chsel{border-radius:7px}

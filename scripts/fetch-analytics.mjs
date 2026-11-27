@@ -34,6 +34,33 @@ async function reportWithFallback(tok, id, name, expanded, simple){
   try { return await report(tok, id, expanded); }
   catch (e) { console.warn(`fallback ${name}: ${e.message}`); return report(tok, id, simple); }
 }
+async function reportExpandedWithFallback(tok, id, params){
+  try { return await report(tok, id, params); }
+  catch (e) {
+    const dimensions = params.dimensions.split(","), metrics = params.metrics.split(","), dimensionCount = dimensions.length;
+    console.warn(`fallback ${dimensions.join(",")} metrics: ${e.message}`);
+    const merged = new Map();
+    for (const metric of metrics.filter(metric => metric !== "views")){
+      try {
+        const rows = await report(tok, id, {...params, metrics:"views," + metric});
+        for (const row of rows){
+          const key = row.slice(0, dimensionCount).join("|");
+          let result = merged.get(key);
+          if (!result){
+            result = [...row.slice(0, dimensionCount), ...Array(metrics.length).fill(null)];
+            merged.set(key, result);
+          }
+          result[dimensionCount + metrics.indexOf("views")] = row[dimensionCount];
+          result[dimensionCount + metrics.indexOf(metric)] = row[dimensionCount + 1];
+        }
+      } catch (fallbackError){
+        console.warn(`optional metric unavailable ${dimensions.join(",")}/${metric}: ${fallbackError.message}`);
+      }
+    }
+    const viewIndex = dimensionCount + metrics.indexOf("views");
+    return [...merged.values()].sort((a,b) => (b[viewIndex] || 0) - (a[viewIndex] || 0));
+  }
+}
 await mkdir("data", {recursive:true});
 let ok = 0, failed = 0;
 for (const c of CHANNELS){
@@ -46,14 +73,14 @@ for (const c of CHANNELS){
       reportWithFallback(tok, c.id, "country", {...b, dimensions:"country", metrics:"views,estimatedMinutesWatched", sort:"-views", maxResults:200}, {...b, dimensions:"country", metrics:"views,estimatedMinutesWatched", sort:"-views", maxResults:8}),
       reportWithFallback(tok, c.id, "video", {...b, dimensions:"video", metrics:"views,averageViewPercentage,subscribersGained", sort:"-views", maxResults:200}, {...b, dimensions:"video", metrics:"views,averageViewPercentage,subscribersGained", sort:"-views", maxResults:10}),
       report(tok, c.id, {...b, dimensions:"deviceType", metrics:"views,estimatedMinutesWatched", sort:"-views"}).catch(() => []),
-      report(tok, c.id, {...b, dimensions:"deviceType", metrics:"views,averageViewDuration,averageViewPercentage,likes,comments,shares", sort:"-views"}).catch(() => null),
-      report(tok, c.id, {...b, dimensions:"country", metrics:"views,averageViewDuration,averageViewPercentage,subscribersGained,likes,comments,shares,dislikes,uniques", sort:"-views", maxResults:200}).catch(() => null),
-      report(tok, c.id, {...b, dimensions:"insightTrafficSourceType", metrics:"views,averageViewDuration,averageViewPercentage,subscribersGained,likes,comments,shares", sort:"-views"}).catch(() => null),
+      reportExpandedWithFallback(tok, c.id, {...b, dimensions:"deviceType", metrics:"views,averageViewDuration,averageViewPercentage,likes,comments,shares", sort:"-views"}),
+      reportExpandedWithFallback(tok, c.id, {...b, dimensions:"country", metrics:"views,averageViewDuration,averageViewPercentage,subscribersGained,likes,comments,shares,dislikes,uniques", sort:"-views", maxResults:200}),
+      reportExpandedWithFallback(tok, c.id, {...b, dimensions:"insightTrafficSourceType", metrics:"views,averageViewDuration,averageViewPercentage,subscribersGained,likes,comments,shares", sort:"-views"}),
       report(tok, c.id, {...b, dimensions:"day", metrics:"engagedViews,dislikes,videosAddedToPlaylists,videosRemovedFromPlaylists", sort:"day"}).catch(() => null),
       report(tok, c.id, {...b, dimensions:"day", metrics:"uniques,redViews,estimatedRedMinutesWatched", sort:"day"}).catch(() => null),
       report(tok, c.id, {...b, dimensions:"day", metrics:"cardImpressions,cardClicks,cardClickRate,cardTeaserImpressions,cardTeaserClicks,cardTeaserClickRate", sort:"day"}).catch(() => null),
       report(tok, c.id, {...b, dimensions:"day", metrics:"annotationImpressions,annotationClickableImpressions,annotationClicks,annotationCloses,annotationClosableImpressions,annotationClickThroughRate,annotationCloseRate", sort:"day"}).catch(() => null),
-      report(tok, c.id, {...b, dimensions:"video", metrics:"views,estimatedMinutesWatched,averageViewDuration,likes,dislikes,comments,shares,subscribersLost,uniques,engagedViews", sort:"-views", maxResults:200}).catch(() => null),
+      reportExpandedWithFallback(tok, c.id, {...b, dimensions:"video", metrics:"views,estimatedMinutesWatched,averageViewDuration,likes,dislikes,comments,shares,subscribersLost,uniques,engagedViews", sort:"-views", maxResults:200}),
       report(tok, c.id, {...b, dimensions:"playlist", metrics:"views,playlistEstimatedMinutesWatched,playlistStarts,playlistSaves,playlistAverageViewDuration", sort:"-views", maxResults:200}).catch(() => null),
       WITH_REV ? report(tok, c.id, {...b, dimensions:"day", metrics:"estimatedRevenue", sort:"day"}).catch(() => null) : Promise.resolve(null),
       WITH_REV ? report(tok, c.id, {...b, dimensions:"day", metrics:"estimatedAdRevenue,grossRevenue,estimatedRedPartnerRevenue,monetizedPlaybacks,adImpressions,playbackBasedCpm,cpm", sort:"day"}).catch(() => null) : Promise.resolve(null)]);
