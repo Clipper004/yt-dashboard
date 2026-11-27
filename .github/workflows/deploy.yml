@@ -25,7 +25,6 @@ jobs:
         with:
           node-version: 22
       - name: Fetch and encrypt Analytics
-        continue-on-error: true
         run: node scripts/fetch-analytics.mjs
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}

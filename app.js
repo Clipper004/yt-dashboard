@@ -39,8 +39,10 @@ async function checkPw(){
   else { w.textContent = "Wrong password."; document.getElementById("p_in").select(); }
 }
 function doSwitch(i){
-  cur = i; applyCh(); TOKEN = null; AN = null; WH365 = null; SNAP = []; ANR = false; lastAnSlot = -1; closeDd();
+  cur = i; applyCh(); TOKEN = null; AN = null; SNAPSHOT = null; WH365 = null; SNAP = []; ANR = false; lastAnSlot = -1; closeDd();
   document.getElementById("apitch").style.display = ""; document.getElementById("abody").style.display = "none";
+  document.getElementById("snapentry").style.display = "none"; document.getElementById("snap_pw").value = ""; document.getElementById("snap_warn").textContent = "";
+  document.getElementById("snap_status").textContent = "Looking for the shared Analytics report…";
   renderSel();
   boot().then(() => { if (CONFIG.ACCESS_TOKEN.length >= 20){ TOKEN = CONFIG.ACCESS_TOKEN; loadAnalytics(); } else loadSnapshot(); });
 }
@@ -195,7 +197,7 @@ const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const gainWin = (x, d1, d2) => { const q = x.age - d1, p = Math.max(0, x.age - d2); return q <= p ? 0 : x.views * (G(q, x.short) - G(p, x.short)) / G(x.age, x.short); };
 const v7of = x => x.views * G(7, x.short) / G(x.age, x.short);   // a video's views, normalised to day 7
 const shortShare = (a, d1, d2) => { let s = 0, t = 0; a.v.forEach(x => { const g = gainWin(x, d1, d2); t += g; if (x.short) s += g; }); return t ? s/t : 0; };
-const spanText = n => n < 120 ? n + " days" : n < 730 ? "about " + Math.round(n/30) + " months" : n < 3650 ? "about " + (n/365).toFixed(1) + " years" : "10+ years";
+const spanText = n => n < 120 ? n + " days" : n < 730 ? Math.round(n/30) + " months" : n < 3650 ? "about " + (n/365).toFixed(1) + " years" : "10+ years";
 
 function weekViews(a){
   const today = new Date().toISOString().slice(0,10), now = Date.now();
@@ -337,7 +339,7 @@ function chart(id, cfg, soft){
     old.update(); return;
   }
   if (old) old.destroy();
-  Object.assign(Chart.defaults,{color:"#a3bdc3",borderColor:"rgba(132,196,205,.16)"}); Chart.defaults.font.family = "Plus Jakarta Sans, system-ui, sans-serif"; Chart.defaults.font.size = 12;
+  Object.assign(Chart.defaults,{color:"#c1d5d9",borderColor:"rgba(132,196,205,.2)"}); Chart.defaults.font.family = "Plus Jakarta Sans, system-ui, sans-serif"; Chart.defaults.font.size = 12;
   Chart.defaults.animation = {duration:1400, easing:"easeOutQuart"}; Chart.defaults.maintainAspectRatio = false;
   try{ Chart.defaults.scales.linear.border.display = false; Chart.defaults.scales.category.grid.display = false; Chart.defaults.scales.category.border.color = "rgba(84,121,224,.25)"; }catch(e){}
   Chart.defaults.elements.bar.borderRadius = 6; Chart.defaults.elements.bar.borderSkipped = false; Chart.defaults.elements.arc.borderRadius = 0;
@@ -592,26 +594,43 @@ async function loadAnalytics(quiet, force = false){
 }
 /* ===== Analytics from the encrypted snapshot (no login needed) ===== */
 const b64d = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+let SNAPSHOT = null;
 async function decryptSnap(j, pw){
   const km = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
   const key = await crypto.subtle.deriveKey({name:"PBKDF2", salt:b64d(j.salt), iterations:j.it, hash:"SHA-256"}, km, {name:"AES-GCM", length:256}, false, ["decrypt"]);
   return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:"AES-GCM", iv:b64d(j.iv)}, key, b64d(j.ct))));
 }
+function applySnapshot(s, id, pw){
+  try { localStorage.setItem("ytd_dpw", pw); } catch(e){}
+  AN = s.AN; writeAnalyticsCache(id, AN, s.t); learnRpm(AN.day, AN.rev); renderAnalytics();
+  const sb = document.querySelector("#an .sub"); if (sb) sb.textContent = "Private YouTube Analytics data for the last 90 days, updated " + hhmm(s.t) + ".";
+}
 async function loadSnapshot(quiet){
   lastAnSlot = slotOf(Date.now(), CONFIG.ANALYTICS_MS);
-  const id = D && D.id; if (!id || !(window.crypto && crypto.subtle)) return;
-  let j; try { const r = await fetch("data/analytics-" + id + ".json?t=" + Date.now(), {cache:"no-store"}); if (!r.ok) return; j = await r.json(); } catch(e){ return; }
+  const id = D && D.id;
+  if (!id || !(window.crypto && crypto.subtle)){ if (!quiet) $("snap_status").textContent = "Shared Analytics is unavailable for this channel or browser."; return; }
+  let j;
+  try { const r = await fetch("data/analytics-" + id + ".json?t=" + Date.now(), {cache:"no-store"}); if (!r.ok) throw new Error("report not found"); j = await r.json(); }
+  catch(e){ if (!quiet) $("snap_status").textContent = "The shared report is not published yet. The dashboard owner needs to configure and run the Analytics publishing workflow."; return; }
+  SNAPSHOT = j;
   let pw = ""; try { pw = localStorage.getItem("ytd_dpw") || ""; } catch(e){}
-  for (let n = 0; n < 2; n++){
-    if (!pw){ if (quiet) return; pw = prompt("Password for the Analytics data") || ""; if (!pw) return; }
-    try {
-      const s = await decryptSnap(j, pw);
-      try { localStorage.setItem("ytd_dpw", pw); } catch(e){}
-      AN = s.AN; writeAnalyticsCache(id, AN, s.t); learnRpm(AN.day, AN.rev); renderAnalytics();
-      const sb = document.querySelector("#an .sub"); if (sb) sb.textContent = "Private YouTube Analytics data for the last 90 days, updated " + hhmm(s.t) + ".";
-      return;
-    } catch(e){ try { localStorage.removeItem("ytd_dpw"); } catch(_){} pw = ""; if (quiet) return; }
+  if (pw){
+    try { applySnapshot(await decryptSnap(j, pw), id, pw); return; }
+    catch(e){ try { localStorage.removeItem("ytd_dpw"); } catch(_){} }
   }
+  if (quiet) return;
+  $("snap_status").textContent = "Enter the shared password to view the private Analytics report.";
+  $("snapentry").style.display = "block"; $("snap_pw").focus();
+}
+async function unlockSnapshot(){
+  const id = D && D.id, pw = $("snap_pw").value;
+  if (!pw){ $("snap_warn").textContent = "Enter the shared password."; return; }
+  if (!SNAPSHOT) await loadSnapshot(false);
+  if (!SNAPSHOT) return;
+  try {
+    applySnapshot(await decryptSnap(SNAPSHOT, pw), id, pw);
+    $("snap_pw").value = ""; $("snap_warn").textContent = "";
+  } catch(e){ $("snap_warn").textContent = "That password did not unlock the report."; $("snap_pw").select(); }
 }
 function renderAnalytics(){
   const soft = ANR; ANR = true;

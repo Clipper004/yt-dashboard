@@ -43,8 +43,16 @@
     <p class="sub">Built from how your videos normally grow after upload, then calibrated against your real recent views. Projections, not guarantees.</p>
     <div class="fc" id="fc"></div></section>
   <section id="an"><h2>Analytics: last 90 days</h2>
-    <p class="sub">Private data from the YouTube Analytics API. It only loads for the Google account that owns the channel.</p>
-    <div id="apitch"><p style="margin:0 0 10px">Connect to see watch time, retention, traffic sources, countries and real subscriber growth.</p><button onclick="connectAnalytics()">Connect Analytics</button> <button class="ghost" onclick="openTok()">Paste token instead</button></div>
+    <p class="sub">Private Analytics shared by the channel owner. Viewers do not need a Google account.</p>
+    <div id="apitch"><p style="margin:0 0 10px">Private Analytics are shared from an encrypted report. No Google sign-in is needed.</p>
+      <p class="sub" id="snap_status" role="status" aria-live="polite">Looking for the shared Analytics report…</p>
+      <div id="snapentry" style="display:none;margin-top:12px;max-width:520px">
+        <label for="snap_pw">Shared Analytics password</label>
+        <input type="password" id="snap_pw" autocomplete="current-password" onkeydown="if(event.key==='Enter')unlockSnapshot()">
+        <p class="warn" id="snap_warn"></p>
+        <div class="btns"><button onclick="unlockSnapshot()">Unlock Analytics</button></div>
+      </div>
+    </div>
     <div id="abody" style="display:none">
       <div id="akpis"></div>
       <div class="grid"><div><h3>Daily views and net subscribers</h3><div class="cv"><canvas id="c5"></canvas></div></div><div><h3>Where views come from</h3><div class="cv"><canvas id="c6"></canvas></div></div></div>
