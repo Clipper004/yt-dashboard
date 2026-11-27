@@ -6,6 +6,7 @@ const need = k => { const v = process.env[k]; if (!v) throw new Error("Missing s
 const CID = need("GOOGLE_CLIENT_ID"), SEC = need("GOOGLE_CLIENT_SECRET");
 const CHANNELS = JSON.parse(need("CHANNELS_JSON"));          // [{"id":"UC...","refresh":"1//..."}]
 const WITH_REV = process.env.WITH_REVENUE !== "false";
+const QUIET_OPTIONAL_DIMENSIONS = new Set(["annotationType", "cardType", "adType", "subscribedStatus"]);
 const iso = d => d.toISOString().slice(0, 10);
 
 async function accessToken(refresh){
@@ -32,6 +33,7 @@ async function reportWithFallback(tok, id, name, expanded, simple){
 await mkdir("data", {recursive:true});
 let ok = 0;
 for (const c of CHANNELS){
+  let skippedOptionalReports = 0;
   try {
     const tok = await accessToken(c.refresh), b = {startDate:iso(new Date(Date.now() - 90*864e5)), endDate:iso(new Date())};
     const [day, traffic, geo, vid, device, deviceMore, geoMore, trafficMore, dayMore, audience, cards, annotations, vidMore, playlist, rev, revMore] = await Promise.all([
@@ -51,7 +53,11 @@ for (const c of CHANNELS){
       report(tok, c.id, {...b, dimensions:"playlist", metrics:"views,playlistEstimatedMinutesWatched,playlistStarts,playlistSaves,playlistAverageViewDuration", sort:"-views", maxResults:200}).catch(() => null),
       WITH_REV ? report(tok, c.id, {...b, dimensions:"day", metrics:"estimatedRevenue", sort:"day"}).catch(() => null) : Promise.resolve(null),
       WITH_REV ? report(tok, c.id, {...b, dimensions:"day", metrics:"estimatedAdRevenue,grossRevenue,estimatedRedPartnerRevenue,monetizedPlaybacks,adImpressions,playbackBasedCpm,cpm", sort:"day"}).catch(() => null) : Promise.resolve(null)]);
-    const optional = p => report(tok, c.id, {...b, ...p}).catch(e => { console.warn("optional report unavailable", p.dimensions, e.message); return []; });
+    const optional = p => report(tok, c.id, {...b, ...p}).catch(e => {
+      if (p.dimensions === "insightTrafficSourceDetail" || p.dimensions === "insightPlaybackLocationDetail") skippedOptionalReports++;
+      else if (!QUIET_OPTIONAL_DIMENSIONS.has(p.dimensions)) console.warn("optional report unavailable", p.dimensions, e.message);
+      return [];
+    });
     const extraPairs = await Promise.all([
       ["operatingSystem", {dimensions:"operatingSystem", metrics:"views,estimatedMinutesWatched,averageViewDuration", sort:"-views", maxResults:200}],
       ["demographics", {dimensions:"ageGroup,gender", metrics:"viewerPercentage", maxResults:200}],
@@ -73,6 +79,7 @@ for (const c of CHANNELS){
     await writeFile(`data/analytics-${c.id}.json`, JSON.stringify({t:Date.now(), AN:{day, traffic, geo, vid, device, deviceMore, geoMore, trafficMore, dayMore, audience, cards, annotations, vidMore, playlist, rev, revMore, extra}}));
     console.log("ok", c.id); ok++;
   } catch (e) { console.error("failed", c.id, e.message); }
+  finally { console.log("optional reports skipped:", skippedOptionalReports); }
 }
 if (!ok) process.exit(1);
 
