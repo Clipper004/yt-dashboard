@@ -25,16 +25,20 @@ async function report(tok, id, p){
   }
   return rows;
 }
+async function reportWithFallback(tok, id, name, expanded, simple){
+  try { return await report(tok, id, expanded); }
+  catch (e) { console.warn(`fallback ${name}: ${e.message}`); return report(tok, id, simple); }
+}
 await mkdir("data", {recursive:true});
 let ok = 0;
 for (const c of CHANNELS){
   try {
     const tok = await accessToken(c.refresh), b = {startDate:iso(new Date(Date.now() - 90*864e5)), endDate:iso(new Date())};
     const [day, traffic, geo, vid, device, deviceMore, geoMore, trafficMore, dayMore, audience, cards, annotations, vidMore, playlist, rev, revMore] = await Promise.all([
-      report(tok, c.id, {...b, dimensions:"day", metrics:"views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost,shares,likes,comments", sort:"day"}),
+      reportWithFallback(tok, c.id, "day", {...b, dimensions:"day", metrics:"views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost,shares,likes,comments", sort:"day"}, {...b, dimensions:"day", metrics:"views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost,shares,likes", sort:"day"}),
       report(tok, c.id, {...b, dimensions:"insightTrafficSourceType", metrics:"views,estimatedMinutesWatched", sort:"-views"}),
-      report(tok, c.id, {...b, dimensions:"country", metrics:"views,estimatedMinutesWatched", sort:"-views", maxResults:200}),
-      report(tok, c.id, {...b, dimensions:"video", metrics:"views,averageViewPercentage,subscribersGained", sort:"-views", maxResults:200}),
+      reportWithFallback(tok, c.id, "country", {...b, dimensions:"country", metrics:"views,estimatedMinutesWatched", sort:"-views", maxResults:200}, {...b, dimensions:"country", metrics:"views,estimatedMinutesWatched", sort:"-views", maxResults:8}),
+      reportWithFallback(tok, c.id, "video", {...b, dimensions:"video", metrics:"views,averageViewPercentage,subscribersGained", sort:"-views", maxResults:200}, {...b, dimensions:"video", metrics:"views,averageViewPercentage,subscribersGained", sort:"-views", maxResults:10}),
       report(tok, c.id, {...b, dimensions:"deviceType", metrics:"views,estimatedMinutesWatched", sort:"-views"}).catch(() => []),
       report(tok, c.id, {...b, dimensions:"deviceType", metrics:"views,averageViewDuration,averageViewPercentage,likes,comments,shares", sort:"-views"}).catch(() => null),
       report(tok, c.id, {...b, dimensions:"country", metrics:"views,averageViewDuration,averageViewPercentage,subscribersGained,likes,comments,shares,dislikes,uniques", sort:"-views", maxResults:200}).catch(() => null),
