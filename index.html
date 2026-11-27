@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Channel Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+<aside class="side">
+  <div class="stat"><div class="sl"><i class="dot" id="dot"></i><span id="upd">Loading…</span></div><div class="sd" id="due"></div><div class="pbar"><i id="pbar"></i></div></div>
+  <div class="logo"><span class="mark"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V11M12 20V4M19 20v-6"/></svg></span><span class="t">Channel Dashboard</span></div>
+  <nav class="menu"><span class="ind" aria-hidden="true"></span>
+  <a class="nv on" href="#kpis"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Overview</a>
+  <a class="nv" href="#latest"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5 3.5-5 3.5z"/></svg>Last 3 videos</a>
+  <a class="nv" href="#forecast"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>Forecast</a>
+  <a class="nv" href="#an"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Analytics</a>
+  <a class="nv" href="#perf"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V11M12 20V4M19 20v-6"/></svg>Performance</a>
+  <a class="nv" href="#seo"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>Titles &amp; SEO</a>
+  <a class="nv" href="#videos"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Videos</a>
+  </nav>
+</aside>
+<div class="content">
+<header class="top">
+  <img id="av" alt="">
+  <div class="tt"><h1 id="cname">Channel Dashboard</h1><small id="cmeta">Loading…</small></div>
+  <div class="sp"></div>
+  <div class="actions">
+    <div class="dd" id="dd"><button type="button" class="ddb" id="ddb" aria-haspopup="listbox" aria-expanded="false" aria-controls="ddl" onclick="toggleDd()"><span class="dav" id="ddav">?</span><span class="ddn" id="ddn">Channel</span><svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6l4.5 4.5L12.5 6"/></svg></button><ul class="ddl" id="ddl" role="listbox" aria-label="Switch channel"></ul></div>
+    <button class="rf" id="rbtn" onclick="refreshAll()" title="Reloads channel stats and Analytics. Can be used once every 20 minutes."><i id="rff"></i><span id="rfl">Refresh</span></button>
+  </div>
+</header>
+<main>
+  <div id="msg"></div>
+  <div class="overview" id="kpis"></div>
+  <section id="latest"><h2>Last 3 videos</h2>
+    <p class="sub">Views are compared with the median of the 10 uploads before these. The white mark on each bar is that typical figure.</p>
+    <div class="vids" id="last3"></div></section>
+  <section id="forecast"><h2>Growth forecast</h2>
+    <p class="sub">Built from how your videos normally grow after upload, then calibrated against your real recent views. Projections, not guarantees.</p>
+    <div class="fc" id="fc"></div></section>
+  <section id="an"><h2>Analytics: last 90 days</h2>
+    <p class="sub">Private data from the YouTube Analytics API. It only loads for the Google account that owns the channel.</p>
+    <div id="apitch"><p style="margin:0 0 10px">Connect to see watch time, retention, traffic sources, countries and real subscriber growth.</p><button onclick="connectAnalytics()">Connect Analytics</button> <button class="ghost" onclick="openTok()">Paste token instead</button></div>
+    <div id="abody" style="display:none">
+      <div id="akpis"></div>
+      <div class="grid"><div><h3>Daily views and net subscribers</h3><div class="cv"><canvas id="c5"></canvas></div></div><div><h3>Where views come from</h3><div class="cv"><canvas id="c6"></canvas></div></div></div>
+      <div class="grid">
+        <div class="wrap"><h3>Top countries</h3><table><thead><tr><th>Country</th><th class="r">Views</th><th class="r">Watch hrs</th></tr></thead><tbody id="geo"></tbody></table></div>
+        <div class="wrap"><h3>Retention on top videos</h3><table><thead><tr><th>Video</th><th class="r">Views</th><th class="r">% viewed</th><th class="r">Subs</th></tr></thead><tbody id="ret"></tbody></table></div>
+      </div>
+      <p class="sub" style="margin-top:14px">Impressions and click-through rate are not exposed by the API. Read those in YouTube Studio.</p>
+    </div></section>
+  <div class="grid" id="perf">
+    <section><h2>Views per video</h2><p class="sub">Each bar is one upload, oldest to newest.</p><div class="cv"><canvas id="c1"></canvas></div></section>
+    <section><h2>Cumulative views + 30-day forecast</h2><p class="sub">Dashed line is the 30-day forecast from the growth model.</p><div class="cv"><canvas id="c2"></canvas></div></section>
+    <section><h2>Best day to post</h2><p class="sub">Average views at day 7, by upload weekday (so older videos are not favoured).</p><div class="cv"><canvas id="c3"></canvas></div><p class="sub" id="best" style="margin-top:10px"></p></section>
+    <section><h2>Shorts vs long-form</h2><p class="sub">Videos of 60 seconds or less count as Shorts.</p><div class="cv"><canvas id="c4"></canvas></div><div id="split" class="sub" style="margin-top:10px"></div></section>
+  </div>
+  <div class="grid" id="seo">
+    <section><h2>Title SEO checker</h2><p class="sub">Type a draft title and get a score before you upload.</p>
+      <input type="text" id="draft" placeholder="Type a title…" aria-label="Draft title" oninput="draftScore()">
+      <div id="dscore" style="margin-top:10px"></div></section>
+    <section><h2>Your title keywords</h2><p class="sub">Most-used words in titles, with average views per video that uses them.</p><div class="kw" id="kw"></div>
+      <p class="sub" id="seoinsight" style="margin-top:10px"></p></section>
+  </div>
+  <section id="videos"><h2>Videos</h2><p class="sub">Sorted by views. Arrows compare each video with your median video. SEO is the title score out of 100.</p>
+    <div class="wrap"><table><thead><tr><th>Title</th><th class="r">Views</th><th class="r">Likes</th><th class="r">Comments</th><th class="r">Engagement</th><th class="r">Views/day</th><th class="r">SEO</th></tr></thead><tbody id="rows"></tbody></table></div></section>
+</main>
+</div></div>
+
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="gt"><div class="box">
+  <h2 id="gt">Connect your channel</h2>
+  <p>Part A gives you public stats. Part B adds private Analytics (watch time, retention, traffic, real subscriber growth). Part C turns your values into a prompt you can send back to me.</p>
+
+  <h3>Part A: YouTube Data API (public stats)</h3>
+  <ol>
+    <li><b>Create a Google Cloud project:</b> <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">New project</a>.</li>
+    <li><b>Enable the API:</b> <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener">YouTube Data API v3</a> → Enable.</li>
+    <li><b>Create an API key:</b> <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Credentials</a> → Create credentials → API key. Restrict it to YouTube Data API v3 and to your site as an HTTP referrer. <a href="https://developers.google.com/youtube/v3/getting-started" target="_blank" rel="noopener">Docs</a>.</li>
+    <li><b>Find your channel ID:</b> <a href="https://www.youtube.com/account_advanced" target="_blank" rel="noopener">advanced settings</a>. It starts with <code>UC</code>. Your @handle also works.</li>
+  </ol>
+
+  <h3>Part B: YouTube Analytics API (private stats)</h3>
+  <ol start="5">
+    <li><b>Enable it:</b> <a href="https://console.cloud.google.com/apis/library/youtubeanalytics.googleapis.com" target="_blank" rel="noopener">YouTube Analytics API</a> → Enable (same project).</li>
+    <li><b>Set up the consent screen:</b> <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" rel="noopener">OAuth consent screen</a>. Choose External, fill the app name and your email, then add your own Google account under Test users. Keep the app in Testing mode.</li>
+    <li><b>Create an OAuth client ID:</b> <a href="https://console.cloud.google.com/apis/credentials/oauthclient" target="_blank" rel="noopener">Create OAuth client</a> → Web application. Under Authorized JavaScript origins add the exact address you open the dashboard from, such as <code>http://localhost:8000</code> or <code>https://yoursite.com</code>. Copy the client ID, which ends in <code>.apps.googleusercontent.com</code>. <a href="https://developers.google.com/identity/oauth2/web/guides/use-token-model" target="_blank" rel="noopener">How this sign-in works</a>.</li>
+    <li><b>Open the dashboard from a web server</b> (<code>python3 -m http.server 8000</code> in the folder) and press Connect Analytics. Google shows an “unverified app” notice because it is your own test app. Click Advanced, then continue.</li>
+  </ol>
+  <p><b>Opening the file straight from your computer?</b> Sign-in can't redirect back, so skip steps 6 to 8: open <a href="https://developers.google.com/oauthplayground" target="_blank" rel="noopener">Google OAuth Playground</a>, paste <code id="t_scope"></code> into the scope box at the bottom of Step 1, press Authorize APIs, then in Step 2 press Exchange authorization code for tokens and copy the Access token (starts with <code>ya29.</code>). Paste it into the Access token field in Part C. It lasts about an hour.</p>
+  <p>Reference: <a href="https://developers.google.com/youtube/analytics/channel_reports" target="_blank" rel="noopener">channel reports</a>, <a href="https://developers.google.com/youtube/analytics/metrics" target="_blank" rel="noopener">metrics list</a>, <a href="https://studio.youtube.com" target="_blank" rel="noopener">YouTube Studio</a> for impressions and CTR. Data API quota is 10,000 units a day (<a href="https://developers.google.com/youtube/v3/determine_quota_cost" target="_blank" rel="noopener">costs</a>).</p>
+
+  <h3>Part C: Fill in, then copy the prompt</h3>
+  <p style="margin:0;color:var(--mut);font-size:13px">Leave anything blank that you don't have yet. Nothing here is sent anywhere until you paste the prompt into the chat.</p>
+  <div class="row2"><div><label for="f_key">API key (starts with AIza)</label><input type="text" id="f_key" autocomplete="off"></div>
+  <div><label for="f_cid">OAuth client ID</label><input type="text" id="f_cid" autocomplete="off"></div></div>
+  <div class="row2"><div><label for="f_ch">Channel ID (starts with UC)</label><input type="text" id="f_ch" autocomplete="off"></div>
+  <div><label for="f_handle">Or @handle</label><input type="text" id="f_handle" autocomplete="off"></div></div>
+  <div><label for="f_tok">Access token (optional, starts with ya29., lasts about an hour)</label><input type="text" id="f_tok" autocomplete="off" placeholder="Paste the token or a redirect URL containing #access_token=…"></div>
+  <div class="row2"><div><label for="f_origin">Address you'll open it from</label><input type="text" id="f_origin" placeholder="http://localhost:8000"></div>
+  <div><label for="f_max">Max videos to load</label><input type="text" id="f_max" value="200"></div></div>
+  <label class="chk"><input type="checkbox" id="f_rev"> My channel is monetized (show estimated revenue)</label>
+  <label for="f_notes">Anything else you want changed or added</label>
+  <textarea id="f_notes" style="min-height:70px" placeholder="e.g. add a Shorts-only view, change colours…"></textarea>
+  <p class="warn" id="f_warn"></p>
+  <div class="btns"><button onclick="buildPrompt()">Generate prompt</button><button class="ghost" onclick="applyNow()">Test these values now</button></div>
+  <label for="f_out">Your prompt</label>
+  <textarea id="f_out" readonly placeholder="Press Generate prompt"></textarea>
+  <div class="btns"><button class="ghost" onclick="copyPrompt()">Copy prompt</button><button class="ghost" onclick="closeGuide()">Close</button></div>
+  <p class="sub">The prompt contains your API key. Only paste it into this chat, and keep the key restricted to your site so it is useless elsewhere.</p>
+</div></div>
+
+<div id="amodal" role="dialog" aria-modal="true" aria-labelledby="at"><div class="box">
+  <h2 id="at">Add a channel</h2>
+  <p>Public stats (videos, views, SEO, forecast) work for any channel with just its ID or @handle. Private Analytics needs a token from a Google account that owns or manages that channel, so each channel gets its own token. In the OAuth Playground, pick that channel when Google asks which one to use.</p>
+  <label for="a_label">Name (optional, filled in from YouTube after it loads)</label><input type="text" id="a_label" autocomplete="off">
+  <label for="a_id">Channel ID (starts with UC) or @handle</label><input type="text" id="a_id" autocomplete="off" placeholder="UC… or @handle">
+  <label for="a_tok">Access token for this channel (optional, starts with ya29.)</label><input type="text" id="a_tok" autocomplete="off">
+  <p class="warn" id="a_warn"></p>
+  <div class="btns"><button onclick="addCh()">Add and switch</button><button class="ghost" id="a_rm" onclick="removeCh()">Remove current channel</button><button class="ghost" onclick="closeAdd()">Close</button></div>
+  <p class="sub">Channels you add here are remembered in this browser (names and IDs only, never tokens). To make them permanent, send me the IDs and I'll hard-code them into EXTRA_CHANNELS.</p>
+</div></div>
+
+<div id="pmodal" role="dialog" aria-modal="true" aria-labelledby="pt"><div class="box" style="max-width:380px">
+  <h2 id="pt">Password required</h2>
+  <p id="p_for" class="sub"></p>
+  <label for="p_in">Password</label><input type="password" id="p_in" autocomplete="off" onkeydown="if(event.key==='Enter')checkPw()">
+  <p class="warn" id="p_warn"></p>
+  <div class="btns"><button onclick="checkPw()">Unlock</button><button class="ghost" onclick="closePw()">Cancel</button></div>
+</div></div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body></html>
