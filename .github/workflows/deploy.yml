@@ -24,12 +24,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Fetch and encrypt Analytics
+      - name: Fetch and publish Analytics
         run: node scripts/fetch-analytics.mjs
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          DATA_PASSWORD: ${{ secrets.DATA_PASSWORD }}
           CHANNELS_JSON: ${{ secrets.CHANNELS_JSON }}
       - name: Collect site files
         run: |

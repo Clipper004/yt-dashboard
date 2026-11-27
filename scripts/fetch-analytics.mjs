@@ -1,13 +1,12 @@
 // Runs in GitHub Actions. Signs in as you with a stored refresh token, pulls the Analytics reports,
-// encrypts them with DATA_PASSWORD (AES-GCM) and writes data/analytics-<channelId>.json for the dashboard.
-import { webcrypto as crypto } from "node:crypto";
+// and writes public data/analytics-<channelId>.json files for the dashboard.
 import { mkdir, writeFile } from "node:fs/promises";
 
 const need = k => { const v = process.env[k]; if (!v) throw new Error("Missing secret " + k); return v; };
-const CID = need("GOOGLE_CLIENT_ID"), SEC = need("GOOGLE_CLIENT_SECRET"), PW = need("DATA_PASSWORD");
+const CID = need("GOOGLE_CLIENT_ID"), SEC = need("GOOGLE_CLIENT_SECRET");
 const CHANNELS = JSON.parse(need("CHANNELS_JSON"));          // [{"id":"UC...","refresh":"1//..."}]
-const WITH_REV = process.env.WITH_REVENUE !== "false", IT = 200000;
-const b64 = u => Buffer.from(u).toString("base64"), iso = d => d.toISOString().slice(0, 10);
+const WITH_REV = process.env.WITH_REVENUE !== "false";
+const iso = d => d.toISOString().slice(0, 10);
 
 async function accessToken(refresh){
   const r = await fetch("https://oauth2.googleapis.com/token", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"},
@@ -18,14 +17,6 @@ async function report(tok, id, p){
   const r = await fetch("https://youtubeanalytics.googleapis.com/v2/reports?" + new URLSearchParams({ids:"channel==" + id, ...p}), {headers:{Authorization:"Bearer " + tok}});
   const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || "Analytics error " + r.status); return j.rows || [];
 }
-async function encrypt(obj){
-  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
-  const km = await crypto.subtle.importKey("raw", new TextEncoder().encode(PW), "PBKDF2", false, ["deriveKey"]);
-  const key = await crypto.subtle.deriveKey({name:"PBKDF2", salt, iterations:IT, hash:"SHA-256"}, km, {name:"AES-GCM", length:256}, false, ["encrypt"]);
-  const ct = new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM", iv}, key, new TextEncoder().encode(JSON.stringify(obj))));
-  return {v:1, it:IT, salt:b64(salt), iv:b64(iv), ct:b64(ct)};
-}
-
 await mkdir("data", {recursive:true});
 let ok = 0;
 for (const c of CHANNELS){
@@ -48,7 +39,7 @@ for (const c of CHANNELS){
       report(tok, c.id, {...b, dimensions:"playlist", metrics:"views,playlistEstimatedMinutesWatched,playlistStarts,playlistSaves,playlistAverageViewDuration", sort:"-views", maxResults:10}).catch(() => null),
       WITH_REV ? report(tok, c.id, {...b, dimensions:"day", metrics:"estimatedRevenue", sort:"day"}).catch(() => null) : Promise.resolve(null),
       WITH_REV ? report(tok, c.id, {...b, dimensions:"day", metrics:"estimatedAdRevenue,grossRevenue,estimatedRedPartnerRevenue,monetizedPlaybacks,adImpressions,playbackBasedCpm,cpm", sort:"day"}).catch(() => null) : Promise.resolve(null)]);
-    await writeFile(`data/analytics-${c.id}.json`, JSON.stringify(await encrypt({t:Date.now(), AN:{day, traffic, geo, vid, device, deviceMore, geoMore, trafficMore, dayMore, audience, cards, annotations, vidMore, playlist, rev, revMore}})));
+    await writeFile(`data/analytics-${c.id}.json`, JSON.stringify({t:Date.now(), AN:{day, traffic, geo, vid, device, deviceMore, geoMore, trafficMore, dayMore, audience, cards, annotations, vidMore, playlist, rev, revMore}}));
     console.log("ok", c.id); ok++;
   } catch (e) { console.error("failed", c.id, e.message); }
 }

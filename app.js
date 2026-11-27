@@ -39,10 +39,9 @@ async function checkPw(){
   else { w.textContent = "Wrong password."; document.getElementById("p_in").select(); }
 }
 function doSwitch(i){
-  cur = i; applyCh(); TOKEN = null; AN = null; SNAPSHOT = null; WH365 = null; SNAP = []; ANR = false; lastAnSlot = -1; closeDd();
+  cur = i; applyCh(); TOKEN = null; AN = null; WH365 = null; SNAP = []; ANR = false; lastAnSlot = -1; closeDd();
   document.getElementById("apitch").style.display = ""; document.getElementById("abody").style.display = "none";
-  document.getElementById("snapentry").style.display = "none"; document.getElementById("snap_pw").value = ""; document.getElementById("snap_warn").textContent = "";
-  document.getElementById("snap_status").textContent = "Looking for the shared Analytics report…";
+  document.getElementById("snap_status").textContent = "Loading the shared Analytics report…";
   renderSel();
   boot().then(() => { if (CONFIG.ACCESS_TOKEN.length >= 20){ TOKEN = CONFIG.ACCESS_TOKEN; loadAnalytics(); } else loadSnapshot(); });
 }
@@ -592,45 +591,19 @@ async function loadAnalytics(quiet, force = false){
     $("msg").innerHTML = `<p class="err">Analytics failed: ${esc(e.message)} If you pasted a token it may have expired (they last about an hour). Otherwise check that the YouTube Analytics API is enabled and that you signed in with the channel owner's account. <button onclick="openTok()">Paste a new token</button></p>`;
   }
 }
-/* ===== Analytics from the encrypted snapshot (no login needed) ===== */
-const b64d = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
-let SNAPSHOT = null;
-async function decryptSnap(j, pw){
-  const km = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
-  const key = await crypto.subtle.deriveKey({name:"PBKDF2", salt:b64d(j.salt), iterations:j.it, hash:"SHA-256"}, km, {name:"AES-GCM", length:256}, false, ["decrypt"]);
-  return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:"AES-GCM", iv:b64d(j.iv)}, key, b64d(j.ct))));
-}
-function applySnapshot(s, id, pw){
-  try { localStorage.setItem("ytd_dpw", pw); } catch(e){}
+/* ===== Analytics from the public snapshot (no login or password needed) ===== */
+function applySnapshot(s, id){
   AN = s.AN; writeAnalyticsCache(id, AN, s.t); learnRpm(AN.day, AN.rev); renderAnalytics();
-  const sb = document.querySelector("#an .sub"); if (sb) sb.textContent = "Private YouTube Analytics data for the last 90 days, updated " + hhmm(s.t) + ".";
+  const sb = document.querySelector("#an .sub"); if (sb) sb.textContent = "Public YouTube Analytics report, last 90 days, updated " + hhmm(s.t) + ".";
 }
 async function loadSnapshot(quiet){
   lastAnSlot = slotOf(Date.now(), CONFIG.ANALYTICS_MS);
   const id = (D && D.id) || CONFIG.CHANNEL_ID;
-  if (!id || !(window.crypto && crypto.subtle)){ if (!quiet) $("snap_status").textContent = "Shared Analytics is unavailable for this channel or browser."; return; }
+  if (!id){ if (!quiet) $("snap_status").textContent = "Shared Analytics is unavailable for this channel."; return; }
   let j;
-  try { const r = await fetch("data/analytics-" + id + ".json?t=" + Date.now(), {cache:"no-store"}); if (!r.ok) throw new Error("report not found"); j = await r.json(); }
+  try { const r = await fetch("data/analytics-" + id + ".json?t=" + Date.now(), {cache:"no-store"}); if (!r.ok) throw new Error("report not found"); j = await r.json(); if (!j || !j.AN) throw new Error("invalid report"); }
   catch(e){ if (!quiet) $("snap_status").textContent = "The shared report is not published yet. The dashboard owner needs to configure and run the Analytics publishing workflow."; return; }
-  SNAPSHOT = j;
-  let pw = ""; try { pw = localStorage.getItem("ytd_dpw") || ""; } catch(e){}
-  if (pw){
-    try { applySnapshot(await decryptSnap(j, pw), id, pw); return; }
-    catch(e){ try { localStorage.removeItem("ytd_dpw"); } catch(_){} }
-  }
-  if (quiet) return;
-  $("snap_status").textContent = "Enter the shared password to view the private Analytics report.";
-  $("snapentry").style.display = "block"; $("snap_pw").focus();
-}
-async function unlockSnapshot(){
-  const id = (D && D.id) || CONFIG.CHANNEL_ID, pw = $("snap_pw").value;
-  if (!pw){ $("snap_warn").textContent = "Enter the shared password."; return; }
-  if (!SNAPSHOT) await loadSnapshot(false);
-  if (!SNAPSHOT) return;
-  try {
-    applySnapshot(await decryptSnap(SNAPSHOT, pw), id, pw);
-    $("snap_pw").value = ""; $("snap_warn").textContent = "";
-  } catch(e){ $("snap_warn").textContent = "That password did not unlock the report."; $("snap_pw").select(); }
+  applySnapshot(j, id);
 }
 function renderAnalytics(){
   const soft = ANR; ANR = true;
