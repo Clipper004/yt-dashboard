@@ -19,6 +19,11 @@ function toggleDd(){ const o = !$("dd").classList.contains("open"); $("dd").clas
 function closeDd(){ const dd = $("dd"); if (dd){ dd.classList.remove("open"); $("ddb").setAttribute("aria-expanded","false"); } }
 function initUI(){
   $("ddl").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; e.preventDefault(); e.stopPropagation(); closeDd(); if (b.dataset.add) openAdd(); else if (+b.dataset.i !== cur) switchCh(+b.dataset.i); });
+  const anRange=$("anRange");
+  if (anRange){
+    try { if (["7","28","90"].includes(localStorage.getItem("ytd_analytics_range"))) anRange.value=localStorage.getItem("ytd_analytics_range"); } catch(e){}
+    anRange.addEventListener("change",()=>{ try{localStorage.setItem("ytd_analytics_range",anRange.value)}catch(e){} renderAnalytics(); });
+  }
   $("p_in").addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); checkPw(); } });
   document.querySelector("#pmodal .btns button").addEventListener("click", e => { e.preventDefault(); checkPw(); });
   document.querySelectorAll("#pmodal .btns button")[1].addEventListener("click", closePw);
@@ -832,7 +837,15 @@ function renderExtraReports(extra){
 function renderAnalytics(){
   const soft = ANR; ANR = true;
   $("apitch").style.display = "none"; $("abody").style.display = "block"; // show first so charts get a real size
-  const d = AN.day, sum = i => d.reduce((a,r) => a + (r[i]||0), 0), views = sum(1), mins = sum(2), net = sum(5) - sum(6), likes = sum(8), comments = sum(9);
+  const range = Number($("anRange")?.value) || 90, daily = AN.day || [];
+  const rangeEnd = daily.length ? daily[daily.length-1][0] : new Date().toISOString().slice(0,10);
+  const rangeStartDate = new Date(rangeEnd + "T00:00:00Z"); rangeStartDate.setUTCDate(rangeStartDate.getUTCDate() - range + 1);
+  const rangeStart = rangeStartDate.toISOString().slice(0,10);
+  const withinRange = rows => (rows || []).filter(row => row[0] >= rangeStart && row[0] <= rangeEnd);
+  const d = withinRange(daily), dayMore = withinRange(AN.dayMore), audience = withinRange(AN.audience), cards = withinRange(AN.cards), annotations = withinRange(AN.annotations);
+  $("anTitle").textContent = `Analytics: last ${range} available days`;
+  $("anWindow").textContent = d.length ? `Daily metrics: ${d[0][0]} to ${d[d.length-1][0]}. Breakdown reports below cover 90 days.` : "No daily Analytics rows in this period. Breakdown reports below cover 90 days.";
+  const sum = i => d.reduce((a,r) => a + (r[i]||0), 0), views = sum(1), mins = sum(2), net = sum(5) - sum(6), likes = sum(8), comments = sum(9);
   const engagement = views ? (likes + comments) / views * 100 : 0, subsPerThousand = views ? net / views * 1000 : 0;
   const wAvg = i => views ? d.reduce((a,r) => a + r[i]*r[1], 0)/views : 0, ad = views ? mins*60/views : 0, ap = wAvg(4);
   const h = Math.floor(d.length/2), A = d.slice(-h), B = d.slice(-2*h,-h);
@@ -842,15 +855,16 @@ function renderAnalytics(){
   const sumRows = (rows, i) => rows ? rows.reduce((s,r)=>s+(r[i]||0),0) : 0;
   const weighted = (rows, value, weight) => { const n=sumRows(rows,weight); return n ? rows.reduce((s,r)=>s+(r[value]||0)*(r[weight]||0),0)/n : 0; };
   const K = [[fmt(views),"Views",cmp(r=>tot(r,x=>x[1]))],[fmt(mins/60),"Watch hours",cmp(r=>tot(r,x=>x[2]))],[Math.floor(ad/60)+"m "+Math.round(ad%60)+"s","Average view duration",cmp(duration)],[ap.toFixed(0)+"%","Average share of video watched",cmp(r=>w(r,4))],[(net>=0?"+":"")+fmt(net),"Net subscribers",cmp(r=>tot(r,x=>x[5]-x[6]))],[fmt(sum(7)),"Shares",cmp(r=>tot(r,x=>x[7]))],[fmt(comments),"Comments",cmp(r=>tot(r,x=>x[9]||0))],[engagement.toFixed(2)+"%","Likes + comments / views",cmp(r=>{const v=tot(r,x=>x[1]);return v?tot(r,x=>(x[8]||0)+(x[9]||0))/v*100:0;})],[subsPerThousand.toFixed(2),"Net subs / 1K views",cmp(r=>{const v=tot(r,x=>x[1]);return v?tot(r,x=>(x[5]||0)-(x[6]||0))/v*1000:0;})]];
-  if (AN.dayMore?.length) K.push([fmt(sumRows(AN.dayMore,1)),"Engaged views",""],[fmt(sumRows(AN.dayMore,2)),"Dislikes",""],[fmt(sumRows(AN.dayMore,3)),"Videos added to playlists",""],[fmt(sumRows(AN.dayMore,4)),"Videos removed from playlists",""]);
-  if (AN.audience?.length) K.push([fmt(sumRows(AN.audience,1)/AN.audience.length),"Average daily unique viewers",""],[fmt(sumRows(AN.audience,2)),"YouTube Premium views",""],[fmt(sumRows(AN.audience,3)/60),"Premium watch hours",""]);
-  if (AN.cards?.length){ const imp=sumRows(AN.cards,1), clicks=sumRows(AN.cards,2), teaserImp=sumRows(AN.cards,4), teaserClicks=sumRows(AN.cards,5); K.push([fmt(imp),"Card impressions",""],[fmt(imp?clicks/imp*100:0)+"%","Card click-through rate",""],[fmt(teaserImp),"Card teaser impressions",""],[fmt(teaserImp?teaserClicks/teaserImp*100:0)+"%","Card teaser click rate",""]); }
-  if (AN.annotations?.length){ const imp=sumRows(AN.annotations,1), clickable=sumRows(AN.annotations,2), clicks=sumRows(AN.annotations,3), closes=sumRows(AN.annotations,4), closable=sumRows(AN.annotations,5); K.push([fmt(imp),"Annotation impressions",""],[fmt(clickable?clicks/clickable*100:0)+"%","Annotation click-through rate",""],[fmt(closable?closes/closable*100:0)+"%","Annotation close rate",""]); }
-  const rv = AN.rev, rt = r => r.reduce((s,x) => s + (x[1]||0), 0);
+  if (dayMore.length) K.push([fmt(sumRows(dayMore,1)),"Engaged views",""],[fmt(sumRows(dayMore,2)),"Dislikes",""],[fmt(sumRows(dayMore,3)),"Videos added to playlists",""],[fmt(sumRows(dayMore,4)),"Videos removed from playlists",""]);
+  if (audience.length) K.push([fmt(sumRows(audience,1)/audience.length),"Average daily unique viewers",""],[fmt(sumRows(audience,2)),"YouTube Premium views",""],[fmt(sumRows(audience,3)/60),"Premium watch hours",""]);
+  if (cards.length){ const imp=sumRows(cards,1), clicks=sumRows(cards,2), teaserImp=sumRows(cards,4), teaserClicks=sumRows(cards,5); K.push([fmt(imp),"Card impressions",""],[fmt(imp?clicks/imp*100:0)+"%","Card click-through rate",""],[fmt(teaserImp),"Card teaser impressions",""],[fmt(teaserImp?teaserClicks/teaserImp*100:0)+"%","Card teaser click rate",""]); }
+  if (annotations.length){ const imp=sumRows(annotations,1), clickable=sumRows(annotations,2), clicks=sumRows(annotations,3), closes=sumRows(annotations,4), closable=sumRows(annotations,5); K.push([fmt(imp),"Annotation impressions",""],[fmt(clickable?clicks/clickable*100:0)+"%","Annotation click-through rate",""],[fmt(closable?closes/closable*100:0)+"%","Annotation close rate",""]); }
+  const rv = withinRange(AN.rev), rt = r => r.reduce((s,x) => s + (x[1]||0), 0);
   if (rv?.length){ K.push(["$"+rt(rv).toFixed(2), "Estimated earnings", h ? trend(rt(rv.slice(-h)), rt(rv.slice(-2*h,-h)), 5, `last ${h} days vs ${h} before`) : ""]); }
   else { const ss = shortShare(D, 0, 90); K.push(["~"+money(estEarn(d, ss)), "Estimated earnings (modeled)", h ? trend(estEarn(A, ss), estEarn(B, ss), 5, `last ${h} days vs ${h} before`) : ""]); }
   K.push([fmt(sum(8)), "Likes", cmp(r=>tot(r,x=>x[8]||0))]);
-  if (AN.revMore?.length) K.push([money(sumRows(AN.revMore,1)),"Estimated ad revenue",""],[money(sumRows(AN.revMore,2)),"Gross revenue",""],[money(sumRows(AN.revMore,3)),"YouTube Premium revenue",""],[fmt(sumRows(AN.revMore,4)),"Monetized playbacks",""],[fmt(sumRows(AN.revMore,5)),"Ad impressions",""],["$"+weighted(AN.revMore,6,4).toFixed(2),"Playback-based CPM",""],["$"+weighted(AN.revMore,7,5).toFixed(2),"CPM",""]);
+  const revMore = withinRange(AN.revMore);
+  if (revMore.length) K.push([money(sumRows(revMore,1)),"Estimated ad revenue",""],[money(sumRows(revMore,2)),"Gross revenue",""],[money(sumRows(revMore,3)),"YouTube Premium revenue",""],[fmt(sumRows(revMore,4)),"Monetized playbacks",""],[fmt(sumRows(revMore,5)),"Ad impressions",""],["$"+weighted(revMore,6,4).toFixed(2),"Playback-based CPM",""],["$"+weighted(revMore,7,5).toFixed(2),"CPM",""]);
   setHTML($("akpis"), K.map(k => `<div><span class="num${/earnings/i.test(k[1]) ? " earnings" : ""}">${k[0]}</span><span class="l">${k[1]}</span>${k[2]}</div>`).join(""), soft);
   chart("c5", {type:"bar", data:{labels:d.map(r=>r[0].slice(5)), datasets:[{type:"line",label:"Views",data:d.map(r=>r[1]),borderColor:"#24a8ba",borderWidth:2,pointRadius:0,tension:.25,yAxisID:"y"},{label:"Net subscribers",data:d.map(r=>r[5]-r[6]),backgroundColor:"rgba(239,189,107,.78)",yAxisID:"y1"}]}, options:{scales:{x:{ticks:{maxTicksLimit:8}},y:{position:"left"},y1:{position:"right",grid:{drawOnChartArea:false}}}}}, soft);
   chart("c6", {type:"bar", data:{labels:AN.traffic.map(r=>displayLabel(r[0])), datasets:[{data:AN.traffic.map(r=>r[1]),backgroundColor:"#24a8ba"}]}, options:{indexAxis:"y",plugins:{legend:{display:false}}}}, soft);

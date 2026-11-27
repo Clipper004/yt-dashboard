@@ -322,7 +322,13 @@ h2+.sub{margin:5px 0 22px}
 #akpis .tr{margin-top:5px;font-size:11px;white-space:normal}
 #abody h3{margin-bottom:11px;color:#c4e3e8}
 #abody .grid{margin-bottom:30px}
+.an-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:20px}
+.an-toolbar .sub{margin-top:5px}
+.an-range{display:flex;align-items:center;gap:9px;margin:0 0 2px;color:var(--mut);font-size:12px;font-weight:600;white-space:nowrap}
+#anRange{min-width:120px;padding:8px 30px 8px 10px;border:1px solid var(--line);border-radius:6px;background:#031a20;color:var(--ink);font:inherit}
+.an-window{margin:0 0 18px}
 .an-group{border-top:1px solid var(--line);padding:14px 0}
+@media(max-width:620px){.an-toolbar{align-items:flex-start;flex-direction:column}.an-range{align-self:flex-end}}
 .an-group summary{display:flex;align-items:center;justify-content:space-between;gap:16px;cursor:pointer;color:var(--ink);font-weight:700;list-style:none}
 .an-group summary::-webkit-details-marker{display:none}
 .an-group summary::after{content:"+";color:var(--blue2);font-size:18px}

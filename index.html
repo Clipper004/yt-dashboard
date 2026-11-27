@@ -22,6 +22,8 @@ window.chartLibraryReady = new Promise(resolve => {
 });
 </script>
 <link rel="stylesheet" href="style.css?v=20261127-6">
+<link rel="stylesheet" href="style.css?v=20261127-7">
+<script src="app.js?v=20261127-8"></script>
 </head>
 <body>
 <div class="app">
@@ -57,20 +59,19 @@ window.chartLibraryReady = new Promise(resolve => {
   <section id="forecast"><h2>Growth forecast</h2>
     <p class="sub">Built from how your videos normally grow after upload, then calibrated against your real recent views. Projections, not guarantees.</p>
     <div class="fc" id="fc"></div></section>
-  <section id="an"><h2>Analytics: last 90 days</h2>
-    <p class="sub">Analytics are public to anyone with this site link. No sign-in or password is needed.</p>
+  <section id="an"><div class="an-toolbar"><div><h2 id="anTitle">Analytics: last 90 available days</h2><p class="sub">Analytics are public to anyone with this site link. No sign-in or password is needed.</p></div><label class="an-range" for="anRange"><span>Duration</span><select id="anRange"><option value="7">7 days</option><option value="28">28 days</option><option value="90" selected>90 days</option></select></label></div>
     <div id="apitch"><p style="margin:0 0 10px">The shared Analytics report loads automatically.</p>
       <p class="sub" id="snap_status" role="status" aria-live="polite">Loading the shared Analytics report…</p>
     </div>
     <div id="abody" style="display:none">
-      <div id="akpis"></div>
-      <div class="grid"><div><h3>Daily views and net subscribers</h3><div class="cv"><canvas id="c5"></canvas></div></div><div><h3>Where views come from</h3><div class="cv"><canvas id="c6"></canvas></div></div></div>
-      <details class="an-report an-report-wide"><summary>Traffic source detail</summary><div class="wrap"><table class="wide"><thead><tr><th>Source</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Avg duration</th><th class="r">Viewed</th><th class="r">Subs gained</th><th class="r">Likes + comments</th><th class="r">Shares</th></tr></thead><tbody id="trafficRows"></tbody></table></div></details>
+      <div id="akpis"></div><p id="anWindow" class="sub an-window"></p>
+      <div class="grid"><div><h3>Daily views and net subscribers</h3><div class="cv"><canvas id="c5"></canvas></div></div><div><h3>Where views come from (90 days)</h3><div class="cv"><canvas id="c6"></canvas></div></div></div>
+      <details class="an-report an-report-wide"><summary>Traffic source detail (90 days)</summary><div class="wrap"><table class="wide"><thead><tr><th>Source</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Avg duration</th><th class="r">Viewed</th><th class="r">Subs gained</th><th class="r">Likes + comments</th><th class="r">Shares</th></tr></thead><tbody id="trafficRows"></tbody></table></div></details>
       <div class="grid">
-        <details class="an-report an-report-wide"><summary>Top countries</summary><div class="wrap"><table class="wide"><thead><tr><th>Country</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Avg duration</th><th class="r">Viewed</th><th class="r">Subs gained</th><th class="r">Likes + comments</th><th class="r">Shares</th></tr></thead><tbody id="geo"></tbody></table></div></details>
-        <details class="an-report an-report-wide"><summary>Top videos: engagement and retention</summary><div class="wrap"><table class="wide"><thead><tr><th>Video</th><th class="r">Views</th><th class="r">% viewed</th><th class="r">Subs +</th><th class="r">Watch hrs</th><th class="r">Avg duration</th><th class="r">Likes</th><th class="r">Comments</th><th class="r">Shares</th><th class="r">Dislikes</th><th class="r">Subs −</th><th class="r">Unique viewers</th><th class="r">Engaged views</th></tr></thead><tbody id="ret"></tbody></table></div></details>
-        <details class="an-report"><summary>Devices</summary><div class="wrap"><table><thead><tr><th>Device</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Avg duration</th><th class="r">Viewed</th><th class="r">Engagement</th><th class="r">Shares</th></tr></thead><tbody id="devices"></tbody></table></div></details>
-        <details class="an-report"><summary>Top playlists</summary><div class="wrap"><table><thead><tr><th>Playlist ID</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Starts</th><th class="r">Saves</th><th class="r">Avg duration</th></tr></thead><tbody id="playlists"></tbody></table></div></details>
+        <details class="an-report an-report-wide"><summary>Top countries (90 days)</summary><div class="wrap"><table class="wide"><thead><tr><th>Country</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Avg duration</th><th class="r">Viewed</th><th class="r">Subs gained</th><th class="r">Likes + comments</th><th class="r">Shares</th></tr></thead><tbody id="geo"></tbody></table></div></details>
+        <details class="an-report an-report-wide"><summary>Top videos: engagement and retention (90 days)</summary><div class="wrap"><table class="wide"><thead><tr><th>Video</th><th class="r">Views</th><th class="r">% viewed</th><th class="r">Subs +</th><th class="r">Watch hrs</th><th class="r">Avg duration</th><th class="r">Likes</th><th class="r">Comments</th><th class="r">Shares</th><th class="r">Dislikes</th><th class="r">Subs −</th><th class="r">Unique viewers</th><th class="r">Engaged views</th></tr></thead><tbody id="ret"></tbody></table></div></details>
+        <details class="an-report"><summary>Devices (90 days)</summary><div class="wrap"><table><thead><tr><th>Device</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Avg duration</th><th class="r">Viewed</th><th class="r">Engagement</th><th class="r">Shares</th></tr></thead><tbody id="devices"></tbody></table></div></details>
+        <details class="an-report"><summary>Top playlists (90 days)</summary><div class="wrap"><table><thead><tr><th>Playlist ID</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Starts</th><th class="r">Saves</th><th class="r">Avg duration</th></tr></thead><tbody id="playlists"></tbody></table></div></details>
       </div>
       <div id="extraReports"></div>
       <p class="sub" style="margin-top:14px">Video thumbnail impressions and thumbnail click-through rate are not included in these API reports. Annotation and card metrics appear when YouTube returns them for your channel.</p>
