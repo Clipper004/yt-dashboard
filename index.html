@@ -57,6 +57,7 @@
         <div class="wrap"><h3>Devices</h3><table><thead><tr><th>Device</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Avg duration</th><th class="r">Viewed</th><th class="r">Engagement</th><th class="r">Shares</th></tr></thead><tbody id="devices"></tbody></table></div>
         <div class="wrap"><h3>Top playlists</h3><table><thead><tr><th>Playlist ID</th><th class="r">Views</th><th class="r">Watch hrs</th><th class="r">Starts</th><th class="r">Saves</th><th class="r">Avg duration</th></tr></thead><tbody id="playlists"></tbody></table></div>
       </div>
+      <div class="grid" id="extraReports"></div>
       <p class="sub" style="margin-top:14px">Video thumbnail impressions and thumbnail click-through rate are not included in these API reports. Annotation and card metrics appear when YouTube returns them for your channel.</p>
     </div></section>
   <div class="grid" id="perf">
@@ -133,9 +134,9 @@
 <div id="pmodal" role="dialog" aria-modal="true" aria-labelledby="pt"><div class="box" style="max-width:380px">
   <h2 id="pt">Password required</h2>
   <p id="p_for" class="sub"></p>
-  <label for="p_in">Password</label><input type="password" id="p_in" autocomplete="off" onkeydown="if(event.key==='Enter')checkPw()">
+  <label for="p_in">Password</label><input type="password" id="p_in" autocomplete="off">
   <p class="warn" id="p_warn"></p>
-  <div class="btns"><button onclick="checkPw()">Unlock</button><button class="ghost" onclick="closePw()">Cancel</button></div>
+  <div class="btns"><button type="button">Unlock</button><button type="button" class="ghost">Cancel</button></div>
 </div></div>
 
 <script src="config.js"></script>
