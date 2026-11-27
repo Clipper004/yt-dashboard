@@ -337,11 +337,11 @@ function chart(id, cfg, soft){
     old.update(); return;
   }
   if (old) old.destroy();
-  Object.assign(Chart.defaults,{color:"#66746d",borderColor:"rgba(39,77,57,.12)"}); Chart.defaults.font.family = "DM Sans, system-ui, sans-serif"; Chart.defaults.font.size = 12;
+  Object.assign(Chart.defaults,{color:"#a3bdc3",borderColor:"rgba(132,196,205,.16)"}); Chart.defaults.font.family = "Plus Jakarta Sans, system-ui, sans-serif"; Chart.defaults.font.size = 12;
   Chart.defaults.animation = {duration:1400, easing:"easeOutQuart"}; Chart.defaults.maintainAspectRatio = false;
   try{ Chart.defaults.scales.linear.border.display = false; Chart.defaults.scales.category.grid.display = false; Chart.defaults.scales.category.border.color = "rgba(84,121,224,.25)"; }catch(e){}
   Chart.defaults.elements.bar.borderRadius = 6; Chart.defaults.elements.bar.borderSkipped = false; Chart.defaults.elements.arc.borderRadius = 0;
-  Object.assign(Chart.defaults.plugins.tooltip,{backgroundColor:"#17231e",borderColor:"#dfe7e2",borderWidth:1,padding:12,cornerRadius:7,titleColor:"#ffffff",bodyColor:"#e4eee8",boxPadding:4});
+  Object.assign(Chart.defaults.plugins.tooltip,{backgroundColor:"#02161c",borderColor:"#1b5260",borderWidth:1,padding:12,cornerRadius:7,titleColor:"#ffffff",bodyColor:"#d8edf0",boxPadding:4});
   Chart.defaults.plugins.legend.labels.usePointStyle = false; Chart.defaults.plugins.legend.labels.boxWidth = 10; Chart.defaults.plugins.legend.labels.boxHeight = 3;
   charts[id] = new Chart($(id), cfg); charts[id]._ty = cfg.type;
 }
@@ -384,14 +384,50 @@ function renderLatest(a, soft){
 }
 
 const dhm = ms => { const t = Math.max(0, Math.floor(ms/1000)), h = Math.floor(t/3600), m = Math.floor(t%3600/60), x = t%60; return h ? h+"h "+m+"m" : m ? m+"m "+x+"s" : x+"s"; };
-function recordSnap(d){
+const PUBLIC_CACHE_MS = 10*60e3;
+const publicCacheKey = key => "ytd_public_" + encodeURIComponent(key);
+function readPublicCache(key){
+  if (!key) return null;
+  try {
+    const saved = JSON.parse(localStorage.getItem(publicCacheKey(key)) || "null");
+    if (!saved || saved.v !== 1 || !Array.isArray(saved.d?.vids) || !saved.d.vids.length) return null;
+    const age = Date.now() - saved.t;
+    if (!Number.isFinite(saved.t) || age < 0 || age >= PUBLIC_CACHE_MS) return null;
+    const d = {...saved.d, created:new Date(saved.d.created), vids:saved.d.vids.map(x => ({...x, pub:new Date(x.pub)})), demo:false};
+    if (!Number.isFinite(d.created.getTime()) || d.vids.some(x => !Number.isFinite(x.pub.getTime()))) return null;
+    return {d, t:saved.t};
+  } catch(e){ return null; }
+}
+function writePublicCache(key, d, t){
+  try {
+    const data = {id:d.id,name:d.name,img:d.img,created:d.created.toISOString(),subs:d.subs,views:d.views,hiddenSubs:d.hiddenSubs,
+      vids:d.vids.map(x => ({id:x.id,title:x.title,pub:x.pub.toISOString(),views:x.views,likes:x.likes,comments:x.comments,dur:x.dur}))};
+    localStorage.setItem(publicCacheKey(key), JSON.stringify({v:1,t,d:data}));
+  } catch(e){}
+}
+const analyticsCacheKey = key => "ytd_analytics_" + encodeURIComponent(key);
+function readAnalyticsCache(key){
+  if (!key) return null;
+  try {
+    const saved = JSON.parse(localStorage.getItem(analyticsCacheKey(key)) || "null"), age = Date.now() - saved?.t;
+    if (!saved || saved.v !== 1 || !Array.isArray(saved.AN?.day) || age < 0 || age >= PUBLIC_CACHE_MS) return null;
+    return {AN:saved.AN,t:saved.t};
+  } catch(e){ return null; }
+}
+function writeAnalyticsCache(key, data, t = Date.now()){
+  if (!key || !data?.day) return;
+  try { localStorage.setItem(analyticsCacheKey(key), JSON.stringify({v:1,t,AN:data})); } catch(e){}
+}
+function recordSnap(d, cached = false){
   const k = "ytd_snap_" + d.id, now = Date.now(); let a = [];
   try { a = JSON.parse(localStorage.getItem(k) || "[]"); } catch(e){}
   a = a.filter(x => now - x.t < 9*864e5);
-  const rec = {t:now, v:d.views, s:d.subs};
-  if (a.length && now - a[a.length-1].t < 60e3) a[a.length-1] = rec; else a.push(rec);
+  if (!cached){
+    const rec = {t:now, v:d.views, s:d.subs};
+    if (a.length && now - a[a.length-1].t < 60e3) a[a.length-1] = rec; else a.push(rec);
+  }
   const out = []; for (const x of a){ if (now - x.t < 3*36e5 || !out.length || x.t - out[out.length-1].t >= 30*6e4) out.push(x); }
-  try { localStorage.setItem(k, JSON.stringify(out)); } catch(e){}
+  if (!cached) try { localStorage.setItem(k, JSON.stringify(out)); } catch(e){}
   return out;
 }
 function renderKpis(d, a, soft){
@@ -445,14 +481,10 @@ function render(d, a, soft){
   renderLatest(a, soft);
   setHTML($("fc"), fcHTML(a), soft);
   // chart 1
-  chart("c1", {type:"bar", data:{labels:a.v.map(x=>x.pub.toLocaleDateString(undefined,{month:"short",day:"numeric"})), datasets:[{data:a.v.map(x=>x.views), backgroundColor:a.v.map(x=>x.short?"#e9ad4b":"#168368")} ]}, options:{plugins:{legend:{display:false}}, scales:{x:{ticks:{maxTicksLimit:8}}}}}, soft);
+  chart("c1", {type:"bar", data:{labels:a.v.map(x=>x.pub.toLocaleDateString(undefined,{month:"short",day:"numeric"})), datasets:[{data:a.v.map(x=>x.views), backgroundColor:a.v.map(x=>x.short?"#efbd6b":"#24a8ba")} ]}, options:{plugins:{legend:{display:false}}, scales:{x:{ticks:{maxTicksLimit:8}}}}}, soft);
   drawC2(a, soft);
-  const maxDow = Math.max(1, ...a.dowAvg);
-  const dowBars = a.dowAvg.map((v,i) => {
-    const count = a.dowN[i];
-    return `<div class="dow-item" title="${DAYS[i]}: ${fmt(Math.round(v))} average views, ${count} uploads"><span class="dow-bar"><i style="height:${v ? Math.max(4, v/maxDow*100) : 0}%"></i></span><span class="dow-label">${DAYS[i]}</span></div>`;
-  }).join("");
-  setHTML($("c3"), a.v.length ? dowBars : '<div class="chart-empty">Not enough upload data</div>', soft);
+  const bestDow = a.dowAvg.indexOf(Math.max(...a.dowAvg));
+  chart("c3", {type:"bar", data:{labels:DAYS, datasets:[{label:"Average views at day 7",data:a.dowAvg.map(Math.round),backgroundColor:DAYS.map((_,i)=>i===bestDow?"#24a8ba":"rgba(36,168,186,.5)"),borderRadius:5,minBarLength:2}]}, options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt(v)}}}}}, soft);
   const ok = a.dowN.map((n,i)=>n>=3?i:-1).filter(i=>i>=0); $("best").textContent = ok.length ? "Based on " + a.v.length + " videos. Weekdays with fewer than 3 uploads are less reliable." : "Upload more videos for a reliable weekday result.";
   const formatTotal = a.shorts.length + a.longs.length;
   const shortsPct = formatTotal ? Math.round(a.shorts.length/formatTotal*100) : 0;
@@ -469,7 +501,7 @@ function drawC2(a, soft){
   let run = 0; const cum = a.v.map(x => (run += x.views)), lbl = a.v.map(x => x.pub.toLocaleDateString(undefined,{month:"short",day:"numeric"}));
   const fl = [], fv = []; let acc = 0;
   for (let i = 1; i <= 6; i++){ fl.push(new Date(Date.now()+i*5*864e5).toLocaleDateString(undefined,{month:"short",day:"numeric"})); for (let k = (i-1)*5; k < i*5; k++) acc += a.proj[k]; fv.push(Math.round(run + acc)); }
-  chart("c2", {type:"line", data:{labels:[...lbl,...fl], datasets:[{label:"Cumulative views",data:cum,borderColor:"#168368",backgroundColor:c=>{const a=c.chart.chartArea;if(!a)return null;const g=c.chart.ctx.createLinearGradient(0,a.top,0,a.bottom);g.addColorStop(0,"rgba(22,131,104,.20)");g.addColorStop(1,"rgba(22,131,104,0)");return g},fill:true,borderWidth:2,pointRadius:0,tension:.3},{label:"Forecast",data:[...Array(cum.length-1).fill(null),run,...fv],borderColor:"#d99b37",borderDash:[6,5],pointRadius:0}]}, options:{scales:{x:{ticks:{maxTicksLimit:8}}}}}, soft);
+  chart("c2", {type:"line", data:{labels:[...lbl,...fl], datasets:[{label:"Cumulative views",data:cum,borderColor:"#24a8ba",backgroundColor:c=>{const a=c.chart.chartArea;if(!a)return null;const g=c.chart.ctx.createLinearGradient(0,a.top,0,a.bottom);g.addColorStop(0,"rgba(36,168,186,.24)");g.addColorStop(1,"rgba(36,168,186,0)");return g},fill:true,borderWidth:2,pointRadius:0,tension:.3},{label:"Forecast",data:[...Array(cum.length-1).fill(null),run,...fv],borderColor:"#efbd6b",borderDash:[6,5],pointRadius:0}]}, options:{scales:{x:{ticks:{maxTicksLimit:8}}}}}, soft);
 }
 function fcHTML(a){
   const cal = a.cal || {src:"model"}, kind = a.nextShort ? "Short" : "video";
@@ -521,19 +553,35 @@ async function ar(p){
   const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || "Analytics error " + r.status);
   return j.rows || [];
 }
-async function loadAnalytics(quiet){
+async function loadAnalytics(quiet, force = false){
+  const cacheKey = D && D.id || CONFIG.CHANNEL_ID || CONFIG.HANDLE;
+  if (!force && !AN){
+    const cached = readAnalyticsCache(cacheKey);
+    if (cached){ AN = cached.AN; lastAnSlot = slotOf(Date.now(), CONFIG.ANALYTICS_MS); learnRpm(AN.day, AN.rev); renderAnalytics(); return; }
+  }
   lastAnSlot = slotOf(Date.now(), CONFIG.ANALYTICS_MS);
   if (CH[cur]) CH[cur].token = TOKEN;
   try {
     const iso = d => d.toISOString().slice(0,10), b = {startDate:iso(new Date(Date.now()-90*864e5)), endDate:iso(new Date())};
-        const [day, traffic, geo, vid, device] = await Promise.all([
+        const [day, traffic, geo, vid, device, deviceMore, geoMore, trafficMore, dayMore, audience, cards, annotations, vidMore, playlist, rev, revMore] = await Promise.all([
           ar({...b, dimensions:"day", metrics:"views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost,shares,likes,comments", sort:"day"}),
       ar({...b, dimensions:"insightTrafficSourceType", metrics:"views,estimatedMinutesWatched", sort:"-views"}),
       ar({...b, dimensions:"country", metrics:"views,estimatedMinutesWatched", sort:"-views", maxResults:8}),
           ar({...b, dimensions:"video", metrics:"views,averageViewPercentage,subscribersGained", sort:"-views", maxResults:10}),
-          ar({...b, dimensions:"deviceType", metrics:"views,estimatedMinutesWatched", sort:"-views"}).catch(() => [])]);
-    const rev = CONFIG.REVENUE ? await ar({...b, dimensions:"day", metrics:"estimatedRevenue", sort:"day"}).catch(() => null) : null;
-        AN = {day, traffic, geo, vid, device, rev}; learnRpm(day, rev); renderAnalytics(); { const w = $("msg").querySelector(".anw"); if (w) w.remove(); }
+          ar({...b, dimensions:"deviceType", metrics:"views,estimatedMinutesWatched", sort:"-views"}).catch(() => []),
+          ar({...b, dimensions:"deviceType", metrics:"views,averageViewDuration,averageViewPercentage,likes,comments,shares", sort:"-views"}).catch(() => null),
+          ar({...b, dimensions:"country", metrics:"views,averageViewDuration,averageViewPercentage,subscribersGained,likes,comments,shares,dislikes,uniques", sort:"-views", maxResults:8}).catch(() => null),
+          ar({...b, dimensions:"insightTrafficSourceType", metrics:"views,averageViewDuration,averageViewPercentage,subscribersGained,likes,comments,shares", sort:"-views"}).catch(() => null),
+          ar({...b, dimensions:"day", metrics:"engagedViews,dislikes,videosAddedToPlaylists,videosRemovedFromPlaylists", sort:"day"}).catch(() => null),
+          ar({...b, dimensions:"day", metrics:"uniques,redViews,estimatedRedMinutesWatched", sort:"day"}).catch(() => null),
+          ar({...b, dimensions:"day", metrics:"cardImpressions,cardClicks,cardClickRate,cardTeaserImpressions,cardTeaserClicks,cardTeaserClickRate", sort:"day"}).catch(() => null),
+          ar({...b, dimensions:"day", metrics:"annotationImpressions,annotationClickableImpressions,annotationClicks,annotationCloses,annotationClosableImpressions,annotationClickThroughRate,annotationCloseRate", sort:"day"}).catch(() => null),
+          ar({...b, dimensions:"video", metrics:"views,estimatedMinutesWatched,averageViewDuration,likes,dislikes,comments,shares,subscribersLost,uniques,engagedViews", sort:"-views", maxResults:10}).catch(() => null),
+          ar({...b, dimensions:"playlist", metrics:"views,playlistEstimatedMinutesWatched,playlistStarts,playlistSaves,playlistAverageViewDuration", sort:"-views", maxResults:10}).catch(() => null),
+          CONFIG.REVENUE ? ar({...b, dimensions:"day", metrics:"estimatedRevenue", sort:"day"}).catch(() => null) : Promise.resolve(null),
+          CONFIG.REVENUE ? ar({...b, dimensions:"day", metrics:"estimatedAdRevenue,grossRevenue,estimatedRedPartnerRevenue,monetizedPlaybacks,adImpressions,playbackBasedCpm,cpm", sort:"day"}).catch(() => null) : Promise.resolve(null)]);
+    AN = {day, traffic, geo, vid, device, deviceMore, geoMore, trafficMore, dayMore, audience, cards, annotations, vidMore, playlist, rev, revMore};
+    writeAnalyticsCache(cacheKey, AN); learnRpm(day, rev); renderAnalytics(); { const w = $("msg").querySelector(".anw"); if (w) w.remove(); }
   } catch (e) {
     if (quiet && AN){ if (!$("msg").querySelector(".anw")) $("msg").insertAdjacentHTML("beforeend", '<p class="anw">Analytics could not refresh (the token has most likely expired), so the last Analytics data is still shown. <button onclick="openTok()">Paste a new token</button></p>'); return; }
     if (e instanceof TypeError){
@@ -559,7 +607,7 @@ async function loadSnapshot(quiet){
     try {
       const s = await decryptSnap(j, pw);
       try { localStorage.setItem("ytd_dpw", pw); } catch(e){}
-      AN = s.AN; learnRpm(AN.day, AN.rev); renderAnalytics();
+      AN = s.AN; writeAnalyticsCache(id, AN, s.t); learnRpm(AN.day, AN.rev); renderAnalytics();
       const sb = document.querySelector("#an .sub"); if (sb) sb.textContent = "Private YouTube Analytics data for the last 90 days, updated " + hhmm(s.t) + ".";
       return;
     } catch(e){ try { localStorage.removeItem("ytd_dpw"); } catch(_){} pw = ""; if (quiet) return; }
@@ -574,18 +622,32 @@ function renderAnalytics(){
   const h = Math.floor(d.length/2), A = d.slice(-h), B = d.slice(-2*h,-h);
   const tot = (r, f) => r.reduce((s,x)=>s+f(x),0), w = (r, i) => tot(r, x=>x[i]*x[1]) / tot(r, x=>x[1]);
   const cmp = f => h ? trend(f(A), f(B), 5, `last ${h} days vs ${h} before`) : "";
+  const sumRows = (rows, i) => rows ? rows.reduce((s,r)=>s+(r[i]||0),0) : 0;
+  const weighted = (rows, value, weight) => { const n=sumRows(rows,weight); return n ? rows.reduce((s,r)=>s+(r[value]||0)*(r[weight]||0),0)/n : 0; };
   const K = [[fmt(views),"Views",cmp(r=>tot(r,x=>x[1]))],[fmt(mins/60),"Watch hours",cmp(r=>tot(r,x=>x[2]))],[Math.floor(ad/60)+"m "+Math.round(ad%60)+"s","Average view duration",cmp(r=>w(r,3))],[ap.toFixed(0)+"%","Average share of video watched",cmp(r=>w(r,4))],[(net>=0?"+":"")+fmt(net),"Net subscribers",cmp(r=>tot(r,x=>x[5]-x[6]))],[fmt(sum(7)),"Shares",cmp(r=>tot(r,x=>x[7]))],[fmt(comments),"Comments",cmp(r=>tot(r,x=>x[9]||0))],[engagement.toFixed(2)+"%","Likes + comments / views",cmp(r=>{const v=tot(r,x=>x[1]);return v?tot(r,x=>(x[8]||0)+(x[9]||0))/v*100:0;})],[subsPerThousand.toFixed(2),"Net subs / 1K views",cmp(r=>{const v=tot(r,x=>x[1]);return v?tot(r,x=>(x[5]||0)-(x[6]||0))/v*1000:0;})]];
+  if (AN.dayMore?.length) K.push([fmt(sumRows(AN.dayMore,1)),"Engaged views",""],[fmt(sumRows(AN.dayMore,2)),"Dislikes",""],[fmt(sumRows(AN.dayMore,3)),"Videos added to playlists",""],[fmt(sumRows(AN.dayMore,4)),"Videos removed from playlists",""]);
+  if (AN.audience?.length) K.push([fmt(sumRows(AN.audience,1)/AN.audience.length),"Average daily unique viewers",""],[fmt(sumRows(AN.audience,2)),"YouTube Premium views",""],[fmt(sumRows(AN.audience,3)/60),"Premium watch hours",""]);
+  if (AN.cards?.length){ const imp=sumRows(AN.cards,1), clicks=sumRows(AN.cards,2), teaserImp=sumRows(AN.cards,4), teaserClicks=sumRows(AN.cards,5); K.push([fmt(imp),"Card impressions",""],[fmt(imp?clicks/imp*100:0)+"%","Card click-through rate",""],[fmt(teaserImp),"Card teaser impressions",""],[fmt(teaserImp?teaserClicks/teaserImp*100:0)+"%","Card teaser click rate",""]); }
+  if (AN.annotations?.length){ const imp=sumRows(AN.annotations,1), clickable=sumRows(AN.annotations,2), clicks=sumRows(AN.annotations,3), closes=sumRows(AN.annotations,4), closable=sumRows(AN.annotations,5); K.push([fmt(imp),"Annotation impressions",""],[fmt(clickable?clicks/clickable*100:0)+"%","Annotation click-through rate",""],[fmt(closable?closes/closable*100:0)+"%","Annotation close rate",""]); }
   const rv = AN.rev, rt = r => r.reduce((s,x) => s + (x[1]||0), 0);
   if (rv){ K.push(["$"+rt(rv).toFixed(2), "Estimated earnings", h ? trend(rt(rv.slice(-h)), rt(rv.slice(-2*h,-h)), 5, `last ${h} days vs ${h} before`) : ""]); }
   else { const ss = shortShare(D, 0, 90); K.push([money(estEarn(d, ss)), "Estimated earnings (formula)", h ? trend(estEarn(A, ss), estEarn(B, ss), 5, `last ${h} days vs ${h} before`) : ""]); }
   K.push([fmt(sum(8)), "Likes", cmp(r=>tot(r,x=>x[8]||0))]);
+  if (AN.revMore?.length) K.push([money(sumRows(AN.revMore,1)),"Estimated ad revenue",""],[money(sumRows(AN.revMore,2)),"Gross revenue",""],[money(sumRows(AN.revMore,3)),"YouTube Premium revenue",""],[fmt(sumRows(AN.revMore,4)),"Monetized playbacks",""],[fmt(sumRows(AN.revMore,5)),"Ad impressions",""],["$"+weighted(AN.revMore,6,4).toFixed(2),"Playback-based CPM",""],["$"+weighted(AN.revMore,7,5).toFixed(2),"CPM",""]);
   setHTML($("akpis"), K.map(k => `<div><span class="num">${k[0]}</span><span class="l">${k[1]}</span>${k[2]}</div>`).join(""), soft);
-  chart("c5", {type:"bar", data:{labels:d.map(r=>r[0].slice(5)), datasets:[{type:"line",label:"Views",data:d.map(r=>r[1]),borderColor:"#168368",borderWidth:2,pointRadius:0,tension:.25,yAxisID:"y"},{label:"Net subscribers",data:d.map(r=>r[5]-r[6]),backgroundColor:"rgba(217,155,55,.78)",yAxisID:"y1"}]}, options:{scales:{x:{ticks:{maxTicksLimit:8}},y:{position:"left"},y1:{position:"right",grid:{drawOnChartArea:false}}}}}, soft);
-  chart("c6", {type:"bar", data:{labels:AN.traffic.map(r=>r[0].replace(/_/g," ").toLowerCase()), datasets:[{data:AN.traffic.map(r=>r[1]),backgroundColor:"#168368"}]}, options:{indexAxis:"y",plugins:{legend:{display:false}}}}, soft);
-  setHTML($("geo"), AN.geo.map(r => `<tr><td>${esc(r[0])}</td><td class="r">${fmt(r[1])}</td><td class="r">${fmt(r[2]/60)}</td></tr>`).join(""), soft);
+  chart("c5", {type:"bar", data:{labels:d.map(r=>r[0].slice(5)), datasets:[{type:"line",label:"Views",data:d.map(r=>r[1]),borderColor:"#24a8ba",borderWidth:2,pointRadius:0,tension:.25,yAxisID:"y"},{label:"Net subscribers",data:d.map(r=>r[5]-r[6]),backgroundColor:"rgba(239,189,107,.78)",yAxisID:"y1"}]}, options:{scales:{x:{ticks:{maxTicksLimit:8}},y:{position:"left"},y1:{position:"right",grid:{drawOnChartArea:false}}}}}, soft);
+  chart("c6", {type:"bar", data:{labels:AN.traffic.map(r=>r[0].replace(/_/g," ").toLowerCase()), datasets:[{data:AN.traffic.map(r=>r[1]),backgroundColor:"#24a8ba"}]}, options:{indexAxis:"y",plugins:{legend:{display:false}}}}, soft);
+  const geoMore = new Map((AN.geoMore || []).map(r=>[r[0],r]));
+  setHTML($("geo"), AN.geo.map(r => { const e=geoMore.get(r[0]); return `<tr><td>${esc(r[0])}</td><td class="r">${fmt(r[1])}</td><td class="r">${fmt(r[2]/60)}</td><td class="r">${e?clock(Math.round(e[2]||0)):"—"}</td><td class="r">${e?(e[3]||0).toFixed(1)+"%":"—"}</td><td class="r">${e?fmt(e[4]):"—"}</td><td class="r">${e?fmt((e[5]||0)+(e[6]||0)):"—"}</td><td class="r">${e?fmt(e[7]):"—"}</td></tr>`; }).join(""), soft);
+  const trafficMore = new Map((AN.trafficMore || []).map(r=>[r[0],r]));
+  setHTML($("trafficRows"), AN.traffic.map(r => { const e=trafficMore.get(r[0]); return `<tr><td>${esc(r[0].replace(/_/g," "))}</td><td class="r">${fmt(r[1])}</td><td class="r">${fmt(r[2]/60)}</td><td class="r">${e?clock(Math.round(e[2]||0)):"—"}</td><td class="r">${e?(e[3]||0).toFixed(1)+"%":"—"}</td><td class="r">${e?fmt(e[4]):"—"}</td><td class="r">${e?fmt((e[5]||0)+(e[6]||0)):"—"}</td><td class="r">${e?fmt(e[7]):"—"}</td></tr>`; }).join(""), soft);
   const device = AN.device || [];
-  setHTML($("devices"), device.map(r => `<tr><td>${esc(r[0].replace(/_/g," ").toLowerCase().replace(/\b[a-z]/g,c=>c.toUpperCase()))}</td><td class="r">${fmt(r[1])}</td><td class="r">${fmt(r[2]/60)}</td><td class="r">${views ? (r[1]/views*100).toFixed(1) : "0.0"}%</td></tr>`).join(""), soft);
-  setHTML($("ret"), AN.vid.map(r => { const v = D.v.find(x => x.id === r[0]); return `<tr><td>${esc(v ? v.title : r[0])}</td><td class="r">${fmt(r[1])}</td><td class="r">${r[2].toFixed(0)}%</td><td class="r">${fmt(r[3])}</td></tr>`; }).join(""), soft);
+  const deviceMore = new Map((AN.deviceMore || []).map(r=>[r[0],r]));
+  setHTML($("devices"), device.map(r => { const e=deviceMore.get(r[0]); return `<tr><td>${esc(r[0].replace(/_/g," ").toLowerCase().replace(/\b[a-z]/g,c=>c.toUpperCase()))}</td><td class="r">${fmt(r[1])}</td><td class="r">${fmt(r[2]/60)}</td><td class="r">${e?clock(Math.round(e[2]||0)):"—"}</td><td class="r">${e?(e[3]||0).toFixed(1)+"%":"—"}</td><td class="r">${e&&e[1]?((e[4]+e[5])/e[1]*100).toFixed(2)+"%":"—"}</td><td class="r">${e?fmt(e[6]||0):"—"}</td></tr>`; }).join(""), soft);
+  const vidMore = new Map((AN.vidMore || []).map(r=>[r[0],r]));
+  setHTML($("ret"), AN.vid.map(r => { const v=D.v.find(x=>x.id===r[0]), e=vidMore.get(r[0]); return `<tr><td>${esc(v?v.title:r[0])}</td><td class="r">${fmt(r[1])}</td><td class="r">${r[2].toFixed(0)}%</td><td class="r">${fmt(r[3])}</td><td class="r">${e?fmt(e[2]/60):"—"}</td><td class="r">${e?clock(Math.round(e[3]||0)):"—"}</td><td class="r">${e?fmt(e[4]):"—"}</td><td class="r">${e?fmt(e[6]):"—"}</td><td class="r">${e?fmt(e[7]):"—"}</td><td class="r">${e?fmt(e[5]):"—"}</td><td class="r">${e?fmt(e[8]):"—"}</td><td class="r">${e?fmt(e[9]):"—"}</td><td class="r">${e?fmt(e[10]):"—"}</td></tr>`; }).join(""), soft);
+  const playlists = AN.playlist || [];
+  setHTML($("playlists"), playlists.map(r=>`<tr><td>${esc(r[0])}</td><td class="r">${fmt(r[1])}</td><td class="r">${fmt(r[2]/60)}</td><td class="r">${fmt(r[3])}</td><td class="r">${fmt(r[4])}</td><td class="r">${clock(Math.round(r[5]))}</td></tr>`).join(""), soft);
   requestAnimationFrame(() => Object.values(charts).forEach(c => c.resize()));
   // rebuild the forecast with the real data
   if (CUR && D){ buildForecast(CUR, D); setHTML($("fc"), fcHTML(D), true); drawC2(D, true); renderKpis(CUR, D, true); }
@@ -639,9 +701,13 @@ function updRf(){
 const slotOf = (t, ms) => Math.floor(t / ms), MIN_GAP = 60e3;
 const hhmm = t => new Date(t).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
 function runRefresh(manual){
-  return boot().then(() => {
+  return boot(manual).then(() => {
+    if (!manual && !AN && D){
+      const cached = readAnalyticsCache(D.id || CONFIG.CHANNEL_ID || CONFIG.HANDLE);
+      if (cached){ AN = cached.AN; lastAnSlot = slotOf(Date.now(), CONFIG.ANALYTICS_MS); learnRpm(AN.day, AN.rev); renderAnalytics(); }
+    }
     if (!TOKEN && CONFIG.ACCESS_TOKEN.length >= 20) TOKEN = CONFIG.ACCESS_TOKEN;
-    if (TOKEN && (manual || slotOf(Date.now(), CONFIG.ANALYTICS_MS) > lastAnSlot)) return loadAnalytics(!manual && ANR);
+    if (TOKEN && (manual || slotOf(Date.now(), CONFIG.ANALYTICS_MS) > lastAnSlot)) return loadAnalytics(!manual && ANR, manual);
     if (!TOKEN && (manual || slotOf(Date.now(), CONFIG.ANALYTICS_MS) > lastAnSlot)) return loadSnapshot(!manual && ANR);
   });
 }
@@ -668,17 +734,20 @@ function tick(){
     else runRefresh(false);
   }
 }
-async function boot(){
+async function boot(force = false){
   const me = ++bootN, key = CONFIG.CHANNEL_ID || CONFIG.HANDLE, soft = !!D && !!RKEY && RKEY === key;
+  const cached = !force && (!D || RKEY !== key) ? readPublicCache(key) : null;
   busy = true; lastTry = Date.now(); lastSlot = slotOf(lastTry, CONFIG.REFRESH_MS); tick();
   if (!soft){ $("msg").innerHTML = ""; $("cmeta").textContent = "Loading…"; }
   try {
     const ready = CONFIG.API_KEY && (CONFIG.CHANNEL_ID || CONFIG.HANDLE);
-    const d = ready ? await live() : demo();
+    const d = cached ? cached.d : ready ? await live() : demo();
     if (me !== bootN) return;
     if (!d.vids.length) throw new Error("No public videos found on this channel.");
-    CUR = d; SNAP = d.demo ? [] : recordSnap(d);
-    D = analyze(d); render(d, D, soft && !d.demo); lastUpdate = Date.now(); RKEY = d.demo ? null : key;
+    CUR = d; SNAP = d.demo ? [] : recordSnap(d, !!cached);
+    D = analyze(d); render(d, D, soft && !d.demo);
+    lastUpdate = cached ? cached.t : Date.now(); if (!cached && !d.demo) writePublicCache(key, d, lastUpdate);
+    RKEY = d.demo ? null : key;
     if (soft) [...$("msg").children].forEach(c => { if (!c.classList.contains("anw")) c.remove(); });
     if (!d.demo && CH[cur]){ CH[cur].label = CH[cur].label || d.name; saveChs(); renderSel(); }
     if (d.demo && !sessionStorage.getItem("guided")){ try{sessionStorage.setItem("guided","1")}catch(e){} openGuide(); }

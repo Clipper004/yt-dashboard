@@ -12,8 +12,9 @@ Static site, no build step. Upload this folder's files to a GitHub repo and turn
 - Anything in it is public if the repo is public. Keep `ACCESS_TOKEN` blank and use the Connect Analytics button.
 
 ## Refresh schedule (fixed to the wall clock)
-- Public stats: every 5 minutes at :00, :05, :10 ... no matter when the page was opened. Opening the page loads once straight away, then follows the clock.
+- Public stats: every 5 minutes at :00, :05, :10 ... while the page is open. Closed pages make no requests. Reopening within 10 minutes reuses that channel's local cache; after 10 minutes it fetches fresh data.
 - Analytics: on the hour. Its data is daily and a token lasts about an hour. Each refresh also fetches comments and device breakdowns; this does not change the hourly cadence.
+- Private Analytics rows are cached in this browser for 10 minutes. OAuth access tokens are never written to browser storage.
 - Costs about 9 API units per refresh (about 2,600 of the 10,000 daily units for one open tab).
 - Change `REFRESH_MS` / `ANALYTICS_MS` in `config.js` if you want another cadence.
 
