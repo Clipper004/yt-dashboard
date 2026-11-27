@@ -31,13 +31,14 @@ let ok = 0;
 for (const c of CHANNELS){
   try {
     const tok = await accessToken(c.refresh), b = {startDate:iso(new Date(Date.now() - 90*864e5)), endDate:iso(new Date())};
-    const [day, traffic, geo, vid] = await Promise.all([
-      report(tok, c.id, {...b, dimensions:"day", metrics:"views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost,shares,likes", sort:"day"}),
+    const [day, traffic, geo, vid, device] = await Promise.all([
+      report(tok, c.id, {...b, dimensions:"day", metrics:"views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost,shares,likes,comments", sort:"day"}),
       report(tok, c.id, {...b, dimensions:"insightTrafficSourceType", metrics:"views,estimatedMinutesWatched", sort:"-views"}),
       report(tok, c.id, {...b, dimensions:"country", metrics:"views,estimatedMinutesWatched", sort:"-views", maxResults:8}),
-      report(tok, c.id, {...b, dimensions:"video", metrics:"views,averageViewPercentage,subscribersGained", sort:"-views", maxResults:10})]);
+      report(tok, c.id, {...b, dimensions:"video", metrics:"views,averageViewPercentage,subscribersGained", sort:"-views", maxResults:10}),
+      report(tok, c.id, {...b, dimensions:"deviceType", metrics:"views,estimatedMinutesWatched", sort:"-views"}).catch(() => [])]);
     const rev = WITH_REV ? await report(tok, c.id, {...b, dimensions:"day", metrics:"estimatedRevenue", sort:"day"}).catch(() => null) : null;
-    await writeFile(`data/analytics-${c.id}.json`, JSON.stringify(await encrypt({t:Date.now(), AN:{day, traffic, geo, vid, rev}})));
+    await writeFile(`data/analytics-${c.id}.json`, JSON.stringify(await encrypt({t:Date.now(), AN:{day, traffic, geo, vid, device, rev}})));
     console.log("ok", c.id); ok++;
   } catch (e) { console.error("failed", c.id, e.message); }
 }

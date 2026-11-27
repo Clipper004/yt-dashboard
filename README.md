@@ -13,7 +13,7 @@ Static site, no build step. Upload this folder's files to a GitHub repo and turn
 
 ## Refresh schedule (fixed to the wall clock)
 - Public stats: every 5 minutes at :00, :05, :10 ... no matter when the page was opened. Opening the page loads once straight away, then follows the clock.
-- Analytics: on the hour. Its data is daily and a token lasts about an hour.
+- Analytics: on the hour. Its data is daily and a token lasts about an hour. Each refresh also fetches comments and device breakdowns; this does not change the hourly cadence.
 - Costs about 9 API units per refresh (about 2,600 of the 10,000 daily units for one open tab).
 - Change `REFRESH_MS` / `ANALYTICS_MS` in `config.js` if you want another cadence.
 
