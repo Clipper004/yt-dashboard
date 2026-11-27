@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -23,10 +23,10 @@ jobs:
       name: github-pages
       url: "${{ steps.dep.outputs.page_url }}"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
       - name: Fetch and encrypt Analytics
         continue-on-error: true
         run: node scripts/fetch-analytics.mjs
@@ -35,9 +35,13 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           DATA_PASSWORD: ${{ secrets.DATA_PASSWORD }}
           CHANNELS_JSON: ${{ secrets.CHANNELS_JSON }}
+      - name: Collect site files
+        run: |
+          mkdir _site
+          rsync -a --exclude '.git' --exclude '.github' --exclude '_site' --exclude 'scripts' ./ _site/
       - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v4
         with:
-          path: .
+          path: _site
       - id: dep
         uses: actions/deploy-pages@v4
